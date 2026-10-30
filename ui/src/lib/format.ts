@@ -75,6 +75,17 @@ export function shortenPath(path: string, max = 48): string {
 }
 
 /**
+ * The last segment of a path — the file or folder name.
+ *
+ * The path comes from the CLI, so it carries the separator of the platform
+ * that produced it; both are handled here.
+ */
+export function baseName(path: string): string {
+  const parts = path.split(/[/\\]/)
+  return parts[parts.length - 1] || path
+}
+
+/**
  * Keep the last few segments of a path.
  *
  * The tail is what tells you where the scan is; the head is the volume you

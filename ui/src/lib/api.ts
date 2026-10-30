@@ -111,6 +111,17 @@ export const api = {
     call<{ scan: ScanMeta; tree: import('./types').Entry | null }>('explore.tree', {
       ...refParams(ref),
     }),
+
+  /**
+   * The contents of one folder of the scan.
+   *
+   * Read from the index — opening a folder never re-walks the disk.
+   */
+  browse: (ref: ScanRef, path: string) =>
+    call<import('./types').BrowserFolder>('explore.children', {
+      ...refParams(ref),
+      path,
+    }),
   sizes: (ref: ScanRef, limit = 50) =>
     call<{ scan: ScanMeta; entries: SizeEntry[] }>('explore.sizes', {
       ...refParams(ref),
@@ -164,6 +175,9 @@ export const api = {
       'cleanup.stage',
       { ...refParams(ref), paths },
     ),
+  /** Take items back off the review list. */
+  unstage: (ref: ScanRef, paths: string[]) =>
+    call<{ removed: number }>('cleanup.unstage', { ...refParams(ref), paths }),
   cleanupList: (ref: ScanRef) =>
     call<{ items: StagedItem[]; total: number }>('cleanup.list', refParams(ref)),
   cleanupValidate: (ref: ScanRef) =>

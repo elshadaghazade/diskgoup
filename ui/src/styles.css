@@ -525,6 +525,58 @@ button {
   gap: 8px;
 }
 
+/* The review list — what is about to be removed. */
+.cleanup-list {
+  max-height: 240px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+
+.cleanup-list .row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.cleanup-list .row:last-child {
+  border-bottom: 0;
+}
+
+.cleanup-list .row .name {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.cleanup-list .row .size {
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.cleanup-list .row .drop {
+  border: 0;
+  background: transparent;
+  color: var(--dimmer);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.cleanup-list .row .drop:hover:not(:disabled) {
+  color: var(--up);
+}
+
+.cleanup-total {
+  margin-top: 10px;
+  color: var(--text);
+  font-size: 12px;
+}
+
 .usage-ring {
   display: flex;
   align-items: center;
@@ -661,6 +713,7 @@ button {
   border-radius: var(--radius);
   background: var(--panel);
   text-align: left;
+  cursor: pointer;
   transition: border-color 0.12s, transform 0.12s;
 }
 
@@ -694,6 +747,110 @@ button {
 .folder-card .meta .size {
   color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+
+/* The card the user picked. */
+.folder-card.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.folder-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The arrow that opens a folder in place. */
+.folder-card .open {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+  color: var(--dim);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.folder-card .open:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ──────────────────────────────────────────────────────── folder browser ── */
+
+/* The path of the folder on screen, and what can be done with it. */
+.browser-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.breadcrumb::-webkit-scrollbar {
+  display: none;
+}
+
+.breadcrumb .sep {
+  color: var(--dimmer);
+  font-size: 12px;
+}
+
+.breadcrumb button {
+  max-width: 220px;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--dim);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.breadcrumb button:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.breadcrumb button.current {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.view-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.browser-note {
+  margin: 12px 18px 0;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-left: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--dim);
+  font-size: 12px;
 }
 
 /* ───────────────────────────────────────────────────────────── table ──── */

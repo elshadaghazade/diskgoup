@@ -58,6 +58,40 @@ export type KindTotal = {
   share: number
 }
 
+/**
+ * One entry inside a folder of a scan.
+ *
+ * `files` and `folders` count what is inside a directory: the files of its
+ * whole subtree and its immediate subfolders.
+ */
+export type BrowserEntry = {
+  name: string
+  path: string
+  is_dir: boolean
+  size: number
+  on_disk: number
+  kind: string
+  protected: boolean
+  mtime: number
+  files: number
+  folders: number
+}
+
+/** One step of the path breadcrumb. */
+export type Crumb = {
+  name: string
+  path: string
+}
+
+/** The contents of one folder of a scan. */
+export type BrowserFolder = {
+  scan: ScanMeta
+  path: string
+  parent: string | null
+  crumbs: Crumb[]
+  entries: BrowserEntry[]
+}
+
 export type SizeEntry = {
   name: string
   path: string
