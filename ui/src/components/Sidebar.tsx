@@ -10,6 +10,7 @@ type Props = {
   busy: boolean
   onSelectRoot: (path: string) => void
   onOpenScan: (meta: ScanMeta) => void
+  onRemoveScan: (meta: ScanMeta) => void
 }
 
 /** A donut showing how much of the volume is in use. */
@@ -58,6 +59,7 @@ export default function Sidebar({
   busy,
   onSelectRoot,
   onOpenScan,
+  onRemoveScan,
 }: Props) {
   const [types, setTypes] = useState<KindTotal[]>([])
 
@@ -142,16 +144,28 @@ export default function Sidebar({
         <div className="sidebar-section">
           <div className="sidebar-label">Scans</div>
           {scans.map((item) => (
-            <button
+            <div
               key={item.scan_id}
               className={`sidebar-item ${item.scan_id === scan?.scan_id ? 'active' : ''}`}
-              onClick={() => onOpenScan(item)}
-              title={`${item.root} · ${bytes(item.total_size)} · ${shortDate(item.finished_at)}`}
             >
-              <span aria-hidden>{item.complete ? '◷' : '◌'}</span>
-              <span>{item.root.split('/').pop() || item.root}</span>
-              <span className="value">{bytes(item.total_size)}</span>
-            </button>
+              <button
+                className="scan-open"
+                onClick={() => onOpenScan(item)}
+                title={`${item.root} · ${bytes(item.total_size)} · ${shortDate(item.finished_at)}`}
+              >
+                <span aria-hidden>{item.complete ? '◷' : '◌'}</span>
+                <span>{item.root.split('/').pop() || item.root}</span>
+                <span className="value">{bytes(item.total_size)}</span>
+              </button>
+              <button
+                className="scan-remove"
+                onClick={() => onRemoveScan(item)}
+                title="Remove this scan from the index"
+                aria-label={`Remove the scan of ${item.root}`}
+              >
+                ×
+              </button>
+            </div>
           ))}
         </div>
       )}

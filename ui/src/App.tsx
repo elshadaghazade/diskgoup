@@ -3,6 +3,7 @@ import { api } from './lib/api'
 import { bytes, count, duration, shortenPath, tailPath } from './lib/format'
 import type { BackendStatus, ScanMeta, ScanRef, Volume } from './lib/types'
 import Sidebar from './components/Sidebar'
+import ConfirmDialog from './components/ConfirmDialog'
 import Inspector from './components/Inspector'
 import ExploreTab from './components/ExploreTab'
 import SearchTab from './components/SearchTab'
@@ -58,6 +59,7 @@ export default function App() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [pendingRemoval, setPendingRemoval] = useState<ScanMeta | null>(null)
 
   // Every view reads the scan this points at. The scan id pins the read to
   // one entry in the CLI's index, so opening a stored scan never re-walks
@@ -175,6 +177,40 @@ export default function App() {
     setMessage(`Scan #${meta.scan_id} · ${meta.root}`)
   }, [])
 
+  /** Ask before removing a scan — the × is one click away from the open action. */
+  const onRemoveScan = useCallback((meta: ScanMeta) => {
+    setPendingRemoval(meta)
+  }, [])
+
+  const cancelRemoveScan = useCallback(() => setPendingRemoval(null), [])
+
+  /**
+   * Remove a scan from the index.
+   *
+   * When the open scan is the one being removed, the next stored scan takes
+   * its place — the views always read from a scan that exists.
+   */
+  const confirmRemoveScan = useCallback(async () => {
+    const meta = pendingRemoval
+    if (!meta) return
+    setPendingRemoval(null)
+    setError('')
+    try {
+      await api.removeScan(meta.scan_id)
+      const listed = await api.scans()
+      setScans(listed.scans)
+      if (scan && scan.scan_id === meta.scan_id) {
+        const next = listed.scans.find((item) => item.complete) ?? listed.scans[0] ?? null
+        setScan(next)
+        setMessage(next ? `Scan #${next.scan_id} · ${next.root}` : 'Scan removed')
+      } else {
+        setMessage(`Removed scan #${meta.scan_id}`)
+      }
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }, [pendingRemoval, scan])
+
   const tabContent = useMemo(() => {
     switch (tab) {
       case 'explore':
@@ -272,6 +308,7 @@ export default function App() {
           busy={busy}
           onSelectRoot={onSelectRoot}
           onOpenScan={onOpenScan}
+          onRemoveScan={onRemoveScan}
         />
 
         <main className="workspace">{tabContent}</main>
@@ -288,6 +325,16 @@ export default function App() {
         {error && <span className="up">{error}</span>}
         {message && <span>{message}</span>}
       </footer>
+
+      {pendingRemoval && (
+        <ConfirmDialog
+          title="Remove this scan?"
+          body={`${pendingRemoval.root} · ${bytes(pendingRemoval.total_size)} will be removed from the index. No files are deleted.`}
+          confirmLabel="Remove scan"
+          onCancel={cancelRemoveScan}
+          onConfirm={() => void confirmRemoveScan()}
+        />
+      )}
     </div>
   )
 }

@@ -40,7 +40,7 @@ for **macOS, Linux and Windows**, with an open, scriptable CLI at the centre.
 | Weekly report (HTML) + type report (CSV) | ✅ working |
 | `diskgoup serve` (JSON-RPC over stdio, for the GUI) | ✅ working |
 | Electron + Vite desktop app | ✅ working — spawns the CLI, renders all nine sections |
-| Desktop scan list | ✅ working — every stored scan is listed and can be opened |
+| Desktop scan list | ✅ working — every stored scan is listed and can be opened or deleted |
 
 ---
 
