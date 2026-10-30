@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# PyInstaller
+build/
+dist/
+*.spec.bak
+
+# Node / Electron
+node_modules/
+*.tsbuildinfo
+electron/dist/
+electron/release/
+electron/out/
+# The compiled CLI binary — rebuilt by `npm --prefix electron run build:cli`.
+electron/resources/diskgoup
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local
+.env
+*.local
+docs/
+README2.md
+
+# AI / editor assistants — kept on this machine, never committed
+.claude/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+.cursor/
+.cursorrules
+.aider*
+.continue/
+.clinerules
+.codeium/
+.github/copilot-instructions.md
+*.prompt.md

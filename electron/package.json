@@ -1,0 +1,89 @@
+{
+  "name": "diskgoup-electron",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Electron wrapper for DiskGOup \u2014 bundles the Vite UI and the compiled CLI binary.",
+  "main": "dist/main.js",
+  "scripts": {
+    "clean": "rm -rf dist resources/diskgoup",
+    "build:electron": "tsc",
+    "build:cli": "node scripts/build-cli.mjs",
+    "build:assets": "node scripts/build-assets.mjs",
+    "build": "npm run clean && npm run build:electron && npm run build:cli && npm run build:assets",
+    "dev:electron": "tsc -w",
+    "dev": "npm run build:electron && npm run build:cli && cross-env DISKGOUP_ELECTRON_DEV=1 electron .",
+    "start": "electron .",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:mac:arm64": "npm run build && electron-builder --mac --arm64",
+    "dist:mac:x64": "npm run build && electron-builder --mac --x64",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:win:x64": "npm run build && electron-builder --win --x64",
+    "dist:linux": "npm run build && electron-builder --linux"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.6.3"
+  },
+  "build": {
+    "appId": "app.diskgoup.desktop",
+    "productName": "DiskGOup",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/diskgoup",
+        "to": "diskgoup",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility"
+    },
+    "dmg": {
+      "title": "DiskGOup ${version}"
+    }
+  }
+}

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DiskGOup weekly report — {{ report.root }}</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --dim: #8b949e;
+    --accent: #f5a623;
+    --up: #ef6461;
+    --down: #5ac18e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px 20px;
+    background: var(--bg); color: var(--text);
+    font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.55;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  h2 { font-size: 15px; margin: 32px 0 12px; letter-spacing: 0.08em;
+       text-transform: uppercase; color: var(--dim); font-weight: 600; }
+  .eyebrow { color: var(--accent); font-size: 12px; letter-spacing: 0.1em;
+             text-transform: uppercase; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 13px; margin: 0 0 28px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--border);
+          border-radius: 10px; padding: 14px 16px; }
+  .card .label { color: var(--dim); font-size: 11px; letter-spacing: 0.08em;
+                 text-transform: uppercase; }
+  .card .value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+  .card .note { color: var(--dim); font-size: 12px; margin-top: 2px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border);
+           font-size: 13px; }
+  th { color: var(--dim); font-weight: 600; font-size: 11px;
+       letter-spacing: 0.06em; text-transform: uppercase; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  .muted { color: var(--dim); }
+  .bar { height: 6px; border-radius: 3px; background: var(--accent); min-width: 2px; }
+  .bar-track { background: #21262d; border-radius: 3px; height: 6px; width: 140px; }
+  .notice { border: 1px solid var(--border); background: var(--panel);
+            border-left: 3px solid var(--accent);
+            border-radius: 8px; padding: 12px 16px; color: var(--dim); font-size: 13px; }
+  code { background: #21262d; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  footer { margin-top: 40px; color: var(--dim); font-size: 12px;
+           border-top: 1px solid var(--border); padding-top: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">DiskGOup weekly report</span>
+    <h1>{{ report.root }}</h1>
+  </header>
+  <p class="sub">Generated {{ report.generated_at }}</p>
+
+  <div class="cards">
+    <div class="card">
+      <div class="label">Total size</div>
+      <div class="value">{{ report.total_size | filesizeformat }}</div>
+      <div class="note">on disk {{ report.total_on_disk | filesizeformat }}</div>
+    </div>
+    <div class="card">
+      <div class="label">Files</div>
+      <div class="value">{{ "{:,}".format(report.files) }}</div>
+      <div class="note">{{ "{:,}".format(report.folders) }} folders</div>
+    </div>
+    <div class="card">
+      <div class="label">7-day change</div>
+      <div class="value {% if report.comparison.total_growth > 0 %}up{% elif report.comparison.total_growth < 0 %}down{% endif %}">
+        {% if report.has_history %}
+          {{ "{:+,.0f}".format(report.comparison.total_growth) | filesizeformat }}
+        {% else %}—{% endif %}
+      </div>
+      <div class="note">
+        {% if report.has_history %}from the same drive seven days earlier
+        {% else %}no comparable history{% endif %}
+      </div>
+    </div>
+  </div>
+
+  <h2>Why is the disk full?</h2>
+  {% if report.has_history %}
+    <p class="sub">Change from the same drive seven days earlier, by file kind.
+       Growth uses the previous category size; usage share uses total scanned bytes.</p>
+  {% else %}
+    <div class="notice">
+      No comparable history. Growth requires a file-type report for the same drive at
+      least 7 days earlier. Current usage is shown below.
+    </div>
+  {% endif %}
+
+  <table>
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th class="num">Current</th>
+        <th class="num">Growth</th>
+        <th class="num">Usage share</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for change in changes %}
+      <tr>
+        <td>{{ change.kind }}</td>
+        <td class="num">{{ change.current | filesizeformat }}</td>
+        <td class="num {% if change.growth > 0 %}up{% elif change.growth < 0 %}down{% else %}muted{% endif %}">
+          {% if report.has_history and change.baseline is not none %}
+            {{ "{:+,.0f}".format(change.growth) | filesizeformat }}
+          {% else %}—{% endif %}
+        </td>
+        <td class="num">{{ "%.1f"|format(change.share * 100) }}%</td>
+        <td>
+          <div class="bar-track">
+            <div class="bar" style="width: {{ "%.1f"|format(change.share * 100) }}%"></div>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>Largest folders</h2>
+  <table>
+    <thead><tr><th>Path</th><th class="num">Size</th></tr></thead>
+    <tbody>
+      {% for path, size in report.largest %}
+      <tr><td><code>{{ path }}</code></td><td class="num">{{ size | filesizeformat }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>About this report</h2>
+  <div class="notice">
+    Measured locally from a scan of <code>{{ report.root }}</code>.
+    Files inside cache/log folders count only in that group, so nothing is counted twice.
+    Nested caches are counted once.
+  </div>
+
+  <footer>Generated by DiskGOup — local analysis, no data leaves this machine.</footer>
+</div>
+</body>
+</html>
