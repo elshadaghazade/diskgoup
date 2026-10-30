@@ -51,6 +51,24 @@ INTERNAL_ERROR = -32603
 
 Handler = Callable[[dict[str, Any], "Server"], Any]
 
+#: The methods that run on a worker thread instead of on the read loop.
+#:
+#: ``scan.run`` has to be there — the GUI pauses a running scan, and the
+#: request that does it can only be read while the scan is still running. The
+#: others are slow on a big index: the kind breakdown reads every file of a
+#: scan, the age map and the treemap read the whole tree, and removing a scan
+#: deletes every row it recorded. Served inline they would hold up every
+#: other request behind them.
+BACKGROUND_METHODS = frozenset(
+    {
+        "scan.run",
+        "explore.types",
+        "explore.age",
+        "view.layout",
+        "scans.remove",
+    }
+)
+
 
 class Server:
     """Dispatches JSON-RPC requests to the CLI's core."""
@@ -142,15 +160,20 @@ class Server:
     # ------------------------------------------------------------ background
 
     def dispatch_background(self, request: dict[str, Any]) -> bool:
-        """Run ``scan.run`` on a worker thread so the read loop keeps going.
+        """Run a slow request on a worker thread so the read loop keeps going.
 
         The GUI has to be able to pause a scan, and the request that does it
-        can only be read while the scan is still running. So the scan runs off
-        the loop and its response is written when it finishes.
+        can only be read while the scan is still running. The same is true of
+        the other slow calls: a scan of a whole volume has millions of
+        entries, so reading the kind breakdown out of it takes seconds. Served
+        inline, one such request stalls every other one behind it — the folder
+        browser would wait for the sidebar's numbers before it could show a
+        folder. Off the loop, the answer arrives when it is ready and the rest
+        of the app keeps working.
 
         Returns ``True`` when the request was handed to a worker.
         """
-        if request.get("method") != "scan.run" or request.get("id") is None:
+        if request.get("method") not in BACKGROUND_METHODS or request.get("id") is None:
             return False
         threading.Thread(target=self._run_background, args=(request,), daemon=True).start()
         return True
@@ -377,13 +400,12 @@ class Server:
 
         with self._index() as index:
             meta = self._scan_for(index, params)
-            totals = index.kind_totals(meta.scan_id)
-            counts = index.kind_counts(meta.scan_id)
-            total = sum(totals.values()) or 1
+            totals = index.kind_breakdown(meta.scan_id)
+            total = sum(size for size, _ in totals.values()) or 1
             ordered = [
-                (kind, totals.get(str(kind), 0), counts.get(str(kind), 0))
+                (kind, *totals.get(str(kind), (0, 0)))
                 for kind in KIND_ORDER
-                if totals.get(str(kind), 0) or counts.get(str(kind), 0)
+                if totals.get(str(kind), (0, 0))[0] or totals.get(str(kind), (0, 0))[1]
             ]
             return {
                 "scan": meta.to_dict(),

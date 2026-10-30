@@ -96,6 +96,8 @@ export default function App() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [pendingRemoval, setPendingRemoval] = useState<ScanMeta | null>(null)
+  // The scan being removed from the index — it can take a while.
+  const [removingScan, setRemovingScan] = useState<number | null>(null)
   const [focus, setFocus] = useState(false)
   // The entry the user selected in the folder browser — the inspector shows it.
   const [selected, setSelected] = useState<BrowserEntry | null>(null)
@@ -244,13 +246,14 @@ export default function App() {
    */
   const confirmRemoveScan = useCallback(async () => {
     const meta = pendingRemoval
-    if (!meta) return
-    setPendingRemoval(null)
+    if (!meta || removingScan !== null) return
+    setRemovingScan(meta.scan_id)
     setError('')
     try {
       await api.removeScan(meta.scan_id)
       const listed = await api.scans()
       setScans(listed.scans)
+      setPendingRemoval(null)
       if (scan && scan.scan_id === meta.scan_id) {
         const next = listed.scans.find((item) => item.complete) ?? listed.scans[0] ?? null
         setScan(next)
@@ -260,8 +263,10 @@ export default function App() {
       }
     } catch (err) {
       setError((err as Error).message)
+    } finally {
+      setRemovingScan(null)
     }
-  }, [pendingRemoval, scan])
+  }, [pendingRemoval, removingScan, scan])
 
   const tabContent = useMemo(() => {
     switch (tab) {
@@ -379,6 +384,7 @@ export default function App() {
           scans={scans}
           scan={scan}
           busy={busy}
+          removing={removingScan}
           onSelectRoot={onSelectRoot}
           onOpenScan={onOpenScan}
           onRemoveScan={onRemoveScan}
@@ -404,6 +410,8 @@ export default function App() {
           title="Remove this scan?"
           body={`${pendingRemoval.root} · ${bytes(pendingRemoval.total_size)} will be removed from the index. No files are deleted.`}
           confirmLabel="Remove scan"
+          busyLabel="Removing…"
+          busy={removingScan !== null}
           onCancel={cancelRemoveScan}
           onConfirm={() => void confirmRemoveScan()}
         />

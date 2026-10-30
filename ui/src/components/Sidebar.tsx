@@ -8,6 +8,8 @@ type Props = {
   scans: ScanMeta[]
   scan: ScanMeta | null
   busy: boolean
+  /** The id of the scan being removed from the index, if any. */
+  removing: number | null
   onSelectRoot: (path: string) => void
   onOpenScan: (meta: ScanMeta) => void
   onRemoveScan: (meta: ScanMeta) => void
@@ -57,11 +59,13 @@ export default function Sidebar({
   scans,
   scan,
   busy,
+  removing,
   onSelectRoot,
   onOpenScan,
   onRemoveScan,
 }: Props) {
   const [types, setTypes] = useState<KindTotal[]>([])
+  const [typesLoading, setTypesLoading] = useState(false)
 
   useEffect(() => {
     if (!scan) {
@@ -69,6 +73,9 @@ export default function Sidebar({
       return
     }
     let cancelled = false
+    // Reading the breakdown out of a big index takes a moment — say so
+    // instead of showing an empty panel.
+    setTypesLoading(true)
     api
       .types({ path: scan.root, scanId: scan.scan_id })
       .then((result) => {
@@ -76,6 +83,9 @@ export default function Sidebar({
       })
       .catch(() => {
         if (!cancelled) setTypes([])
+      })
+      .finally(() => {
+        if (!cancelled) setTypesLoading(false)
       })
     return () => {
       cancelled = true
@@ -151,6 +161,7 @@ export default function Sidebar({
               <button
                 className="scan-open"
                 onClick={() => onOpenScan(item)}
+                disabled={removing === item.scan_id}
                 title={`${item.root} · ${bytes(item.total_size)} · ${shortDate(item.finished_at)}`}
               >
                 <span aria-hidden>{item.complete ? '◷' : '◌'}</span>
@@ -160,19 +171,30 @@ export default function Sidebar({
               <button
                 className="scan-remove"
                 onClick={() => onRemoveScan(item)}
+                disabled={removing !== null}
                 title="Remove this scan from the index"
                 aria-label={`Remove the scan of ${item.root}`}
               >
-                ×
+                {removing === item.scan_id ? (
+                  <span className="spinner" aria-label="Removing this scan" />
+                ) : (
+                  '×'
+                )}
               </button>
             </div>
           ))}
         </div>
       )}
 
-      {types.length > 0 && (
+      {(types.length > 0 || typesLoading) && (
         <div className="sidebar-section">
           <div className="sidebar-label">File types</div>
+          {typesLoading && (
+            <div className="sidebar-hint">
+              <span className="spinner" aria-hidden="true" />
+              Reading the index…
+            </div>
+          )}
           {types.map((item) => (
             <div key={item.kind} className="sidebar-item" style={{ cursor: 'default' }}>
               <span className="kind-dot" style={{ background: kindColor(item.kind) }} />

@@ -106,6 +106,17 @@ CREATE INDEX IF NOT EXISTS idx_staged_scan ON staged(scan_id, status);
 #: The schema version stored in the index. Bump it when ``_SCHEMA`` changes.
 _SCHEMA_VERSION = 2
 
+#: The children of one folder.
+#:
+#: There is deliberately no ``ORDER BY`` in this statement. With one, SQLite
+#: picks the index on ``(scan_id, name)`` — it satisfies the ordering — and
+#: then has to walk *every* entry of the scan to find the rows with the right
+#: parent. On a two-million-entry scan that is 18 seconds instead of 4
+#: milliseconds. Without the ordering, the index on
+#: ``(scan_id, parent_id)`` answers the question directly. The rows are sorted
+#: in Python instead.
+_CHILDREN_SQL = "SELECT * FROM entries WHERE scan_id = ? AND parent_id = ?"
+
 #: What each version adds to an index that already has the tables. Applied in
 #: order when an existing index is opened, so an index written by an older
 #: version gains the new indexes instead of being marked as up to date.
@@ -362,15 +373,15 @@ class ScanIndex:
         return cast(sqlite3.Row | None, row)
 
     def children(self, scan_id: int, parent_id: int | None) -> list[sqlite3.Row]:
+        """The direct children of one folder, ordered by name."""
         if parent_id is None:
             return self._conn.execute(
                 "SELECT * FROM entries WHERE scan_id = ? AND parent_id IS NULL",
                 (scan_id,),
             ).fetchall()
-        return self._conn.execute(
-            "SELECT * FROM entries WHERE scan_id = ? AND parent_id = ? ORDER BY name",
-            (scan_id, parent_id),
-        ).fetchall()
+        rows = self._conn.execute(_CHILDREN_SQL, (scan_id, parent_id)).fetchall()
+        # Sorted here and not in SQL — see the note on ``_CHILDREN_SQL``.
+        return sorted(rows, key=lambda row: str(row["name"]))
 
     def entry_by_path(self, scan_id: int, path: Path) -> sqlite3.Row | None:
         row = self._conn.execute(
@@ -577,19 +588,26 @@ class ScanIndex:
 
     # ------------------------------------------------------------------ helpers
 
-    def kind_totals(self, scan_id: int) -> dict[str, int]:
-        """Total size per file kind for a scan."""
+    def kind_breakdown(self, scan_id: int) -> dict[str, tuple[int, int]]:
+        """Size and file count per file kind, in a single pass.
+
+        Both numbers come out of one grouped query: the scan's entries are
+        read once, not once per number.
+        """
         rows = self._conn.execute(
             """
-            SELECT kind, SUM(size) AS total
+            SELECT kind, SUM(size) AS total, COUNT(*) AS files
               FROM entries
              WHERE scan_id = ? AND is_dir = 0
              GROUP BY kind
-             ORDER BY total DESC
             """,
             (scan_id,),
         ).fetchall()
-        return {row["kind"]: int(row["total"] or 0) for row in rows}
+        return {row["kind"]: (int(row["total"] or 0), int(row["files"])) for row in rows}
+
+    def kind_totals(self, scan_id: int) -> dict[str, int]:
+        """Total size per file kind for a scan."""
+        return {kind: size for kind, (size, _) in self.kind_breakdown(scan_id).items()}
 
     def files_with_mtime(self, scan_id: int) -> list[tuple[int, float]]:
         """``(size, mtime)`` for every file in a scan."""
@@ -603,13 +621,4 @@ class ScanIndex:
 
     def kind_counts(self, scan_id: int) -> dict[str, int]:
         """File count per file kind for a scan."""
-        rows = self._conn.execute(
-            """
-            SELECT kind, COUNT(*) AS total
-              FROM entries
-             WHERE scan_id = ? AND is_dir = 0
-             GROUP BY kind
-            """,
-            (scan_id,),
-        ).fetchall()
-        return {row["kind"]: int(row["total"]) for row in rows}
+        return {kind: count for kind, (_, count) in self.kind_breakdown(scan_id).items()}
