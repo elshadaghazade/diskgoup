@@ -15,6 +15,9 @@ export type BackendStatus = {
 export type RpcNotification = { method: string; params: unknown }
 
 const api = {
+  /** The host platform — macOS draws its window controls over the topbar. */
+  platform: process.platform,
+
   /** Call a method on the DiskGOup CLI. */
   call: <T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> =>
     ipcRenderer.invoke('cli:call', method, params ?? {}),
