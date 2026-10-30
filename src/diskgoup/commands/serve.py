@@ -71,6 +71,7 @@ class Server:
                 "app.ping": self._ping,
                 "drives.list": self._drives_list,
                 "scans.list": self._scans_list,
+                "scans.remove": self._scans_remove,
                 "scan.run": self._scan_run,
                 "scan.pause": self._scan_pause,
                 "scan.resume": self._scan_resume,
@@ -201,6 +202,20 @@ class Server:
     def _scans_list(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
         with self._index() as index:
             return {"scans": [meta.to_dict() for meta in index.scans()]}
+
+    def _scans_remove(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
+        """Remove a scan and everything recorded for it from the index."""
+        raw = params.get("scan_id")
+        if raw is None:
+            raise ValueError("scan_id is required")
+        scan_id = int(raw)
+
+        with self._index() as index:
+            meta = index.scan_meta(scan_id)
+            if meta is None:
+                raise ValueError(f"no scan with id {scan_id}")
+            index.delete_scan(scan_id)
+            return {"removed": meta.to_dict()}
 
     def _scan_run(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
         from pathlib import Path

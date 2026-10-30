@@ -175,6 +175,33 @@ export default function App() {
     setMessage(`Scan #${meta.scan_id} · ${meta.root}`)
   }, [])
 
+  /**
+   * Remove a scan from the index.
+   *
+   * When the open scan is the one being removed, the next stored scan takes
+   * its place — the views always read from a scan that exists.
+   */
+  const onRemoveScan = useCallback(
+    async (meta: ScanMeta) => {
+      setError('')
+      try {
+        await api.removeScan(meta.scan_id)
+        const listed = await api.scans()
+        setScans(listed.scans)
+        if (scan && scan.scan_id === meta.scan_id) {
+          const next = listed.scans.find((item) => item.complete) ?? listed.scans[0] ?? null
+          setScan(next)
+          setMessage(next ? `Scan #${next.scan_id} · ${next.root}` : 'Scan removed')
+        } else {
+          setMessage(`Removed scan #${meta.scan_id}`)
+        }
+      } catch (err) {
+        setError((err as Error).message)
+      }
+    },
+    [scan],
+  )
+
   const tabContent = useMemo(() => {
     switch (tab) {
       case 'explore':
@@ -272,6 +299,7 @@ export default function App() {
           busy={busy}
           onSelectRoot={onSelectRoot}
           onOpenScan={onOpenScan}
+          onRemoveScan={onRemoveScan}
         />
 
         <main className="workspace">{tabContent}</main>

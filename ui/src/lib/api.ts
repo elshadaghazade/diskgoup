@@ -90,6 +90,10 @@ export const api = {
   volumes: () => call<{ volumes: Volume[] }>('drives.list'),
   scans: () => call<{ scans: ScanMeta[] }>('scans.list'),
 
+  /** Remove a scan and everything recorded for it from the index. */
+  removeScan: (scanId: number) =>
+    call<{ removed: ScanMeta }>('scans.remove', { scan_id: scanId }),
+
   scan: (path: string) =>
     call<ScanMeta & { canceled: boolean }>('scan.run', { path }),
 

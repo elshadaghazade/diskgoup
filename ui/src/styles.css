@@ -390,6 +390,38 @@ button {
   color: var(--accent);
 }
 
+/* A scan row: the row itself opens the scan, the × removes it from the index. */
+.sidebar-item .scan-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar-item .scan-remove {
+  padding: 0 5px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--dim);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sidebar-item .scan-remove:hover {
+  background: var(--panel-2);
+  color: #ef6461;
+}
+
 .button {
   display: inline-flex;
   align-items: center;
