@@ -61,8 +61,8 @@ the Electron shell. No global installs, no manual steps, no "install the CLI
 first".
 
 ```bash
-git clone https://github.com/elshadaghazade/diskgoup-alternative.git
-cd diskgoup-alternative
+git clone https://github.com/elshadaghazade/diskgoup.git
+cd diskgoup
 
 uv sync                        # Python environment + CLI + build tools
 npm --prefix ui install        # renderer packages

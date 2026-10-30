@@ -7,7 +7,9 @@ The scanner walks a tree once and writes every entry into the SQLite index. It i
 * **partial-safe** — an unreadable entry is recorded as *skipped* and the scan
   continues, exactly as DiskBOX reports skipped-entry notices;
 * **cancelable** — a progress callback can request a stop;
-* **pausable** — a :class:`ScanControl` can hold the walk between two entries.
+* **pausable** — a :class:`ScanControl` can hold the walk between two entries;
+* **single-pass** — the totals of a directory are accumulated while its subtree
+  is walked, so the index is never read back to be rolled up afterwards.
 """
 
 from __future__ import annotations
@@ -22,7 +24,7 @@ from pathlib import Path
 
 from diskgoup.core.kinds import classify_dir, classify_file
 from diskgoup.core.models import Kind, ScanMeta
-from diskgoup.core.protect import is_protected
+from diskgoup.core.protect import DirGuard, entry_is_protected, guard_for, is_protected
 from diskgoup.core.store import ScanIndex
 
 #: Attribute bit meaning "hidden" on Windows.
@@ -42,6 +44,8 @@ class ScanOptions:
     exclude: tuple[str, ...] = ()
     max_depth: int | None = None
     batch_size: int = 2000
+    #: Collect a timing breakdown of the run.
+    profile: bool = False
 
 
 @dataclass(slots=True)
@@ -51,7 +55,7 @@ class ScanProgress:
     files: int = 0
     folders: int = 0
     bytes_seen: int = 0
-    current: Path | None = None
+    current: str | None = None
     started_at: float = field(default_factory=time.time)
 
     @property
@@ -75,13 +79,18 @@ class ScanResult:
     meta: ScanMeta
     skipped: list[tuple[Path, str]] = field(default_factory=list)
     canceled: bool = False
+    #: Where the time went, when the run was profiled.
+    timings: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
-        return {
+        data: dict[str, object] = {
             **self.meta.to_dict(),
             "canceled": self.canceled,
             "skipped_entries": [{"path": str(p), "reason": r} for p, r in self.skipped],
         }
+        if self.timings:
+            data["timings"] = self.timings
+        return data
 
 
 class ScanCanceledError(Exception):
@@ -135,6 +144,20 @@ class ScanControl:
 ProgressCallback = Callable[[ScanProgress], None]
 
 
+@dataclass(slots=True)
+class _Profiler:
+    """Collects a timing breakdown of a scan run."""
+
+    enabled: bool = False
+    spans: dict[str, float] = field(default_factory=dict)
+
+    def add(self, name: str, seconds: float) -> None:
+        self.spans[name] = self.spans.get(name, 0.0) + seconds
+
+    def to_dict(self) -> dict[str, float]:
+        return {name: round(value, 4) for name, value in sorted(self.spans.items())}
+
+
 class Scanner:
     """Walk a filesystem tree into a :class:`~diskgoup.core.store.ScanIndex`."""
 
@@ -170,47 +193,71 @@ class Scanner:
         skipped: list[tuple[Path, str]] = []
         canceled = False
 
+        profiler = _Profiler(enabled=self.options.profile)
+        profiling = profiler.enabled
+
+        options = self.options
+        follow_symlinks = options.follow_symlinks
+        include_hidden = options.include_hidden
+        exclude = options.exclude
+        max_depth = options.max_depth
+        batch_size = options.batch_size
+
+        walk_started = time.perf_counter()
         try:
             root_kind = classify_dir(root.name)
             root_protected = is_protected(root, root_kind)
+            root_state = _DirState()
             root_id = self._insert_dir(
-                scan_id, None, root, root_kind, root_protected, 0, started, state
+                scan_id, None, root, root.name, root_kind, root_protected, 0, _mtime(root)
             )
+            root_state.entry_id = root_id
             stack: list[_PendingDir] = [
                 _PendingDir(
                     path=root,
                     entry_id=root_id,
                     depth=0,
                     forced=root_kind if root_kind in _INHERITED_KINDS else None,
-                    protected=root_protected,
+                    guard=guard_for(root, protected=root_protected),
+                    state=root_state,
                 )
             ]
 
             while stack:
                 current = stack.pop()
+                cstate = current.state
+                cguard = current.guard
+                cforced = current.forced
+                cdepth = current.depth
+                cpath = current.path
                 try:
-                    with os.scandir(current.path) as iterator:
+                    with os.scandir(cpath) as iterator:
                         for entry in iterator:
                             if control is not None:
                                 control.checkpoint()
+
                             if progress is not None:
-                                state.current = Path(entry.path)
+                                # The path is kept as a string: building a Path
+                                # for every entry was a measurable part of the
+                                # cost of a scan.
+                                state.current = entry.path
                                 progress(state.snapshot())
 
-                            if not self.options.include_hidden and _is_hidden(entry):
+                            name = entry.name
+                            if not include_hidden and _is_hidden(entry):
                                 continue
-                            if self._excluded(entry.name, entry.path):
+                            if exclude and self._excluded(name, entry.path):
                                 continue
 
                             try:
                                 is_symlink = entry.is_symlink()
-                                is_dir = entry.is_dir(follow_symlinks=self.options.follow_symlinks)
+                                is_dir = entry.is_dir(follow_symlinks=follow_symlinks)
                             except OSError as exc:
                                 skipped.append((Path(entry.path), str(exc)))
                                 self.index.add_skipped(scan_id, Path(entry.path), str(exc))
                                 continue
 
-                            if is_symlink and not self.options.follow_symlinks:
+                            if is_symlink and not follow_symlinks:
                                 # Record the link itself; never traverse it.
                                 is_dir = False
 
@@ -221,70 +268,101 @@ class Scanner:
                                 self.index.add_skipped(scan_id, Path(entry.path), str(exc))
                                 continue
 
-                            child_path = Path(entry.path)
-                            protected = current.protected or is_protected(child_path)
+                            if profiling:
+                                mark = time.perf_counter()
+                            protected = entry_is_protected(entry.path, name, st, cguard)
+                            if profiling:
+                                profiler.add("protect", time.perf_counter() - mark)
 
                             if is_dir:
-                                kind = classify_dir(entry.name, forced=current.forced)
+                                if profiling:
+                                    mark = time.perf_counter()
+                                kind = classify_dir(name, forced=cforced)
+                                if profiling:
+                                    profiler.add("classify", time.perf_counter() - mark)
+                                child_path = Path(entry.path)
+                                child_state = _DirState(parent=cstate)
                                 child_id = self._insert_dir(
                                     scan_id,
-                                    current.entry_id,
+                                    cstate.entry_id,
                                     child_path,
+                                    name,
                                     kind,
                                     protected,
-                                    current.depth + 1,
-                                    started,
-                                    state,
+                                    cdepth + 1,
+                                    float(st.st_mtime),
                                 )
-                                if (
-                                    self.options.max_depth is None
-                                    or current.depth + 1 < self.options.max_depth
-                                ):
+                                child_state.entry_id = child_id
+                                cstate.child_dirs += 1
+                                if max_depth is None or cdepth + 1 < max_depth:
                                     state.folders += 1
                                     stack.append(
                                         _PendingDir(
                                             path=child_path,
                                             entry_id=child_id,
-                                            depth=current.depth + 1,
+                                            depth=cdepth + 1,
                                             forced=kind if kind in _INHERITED_KINDS else None,
-                                            protected=protected,
+                                            guard=guard_for(entry.path, protected=protected),
+                                            state=child_state,
                                         )
                                     )
+                                else:
+                                    # The row exists, but the subtree below it is
+                                    # not walked.
+                                    self._finish_dir(child_state, profiler)
                                 continue
 
-                            kind = classify_file(entry.name, parent_kind=current.forced)
+                            if profiling:
+                                mark = time.perf_counter()
+                            kind = classify_file(name, parent_kind=cforced)
+                            if profiling:
+                                profiler.add("classify", time.perf_counter() - mark)
                             size = int(st.st_size)
                             on_disk = _allocated_size(st)
                             state.files += 1
                             state.bytes_seen += size
                             state.on_disk_seen += on_disk
+                            cstate.own_size += size
+                            cstate.own_on_disk += on_disk
+                            cstate.own_files += 1
                             pending.append(
                                 (
-                                    current.entry_id,
-                                    str(child_path),
-                                    entry.name,
+                                    cstate.entry_id,
+                                    entry.path,
+                                    name,
                                     0,
                                     size,
                                     on_disk,
                                     float(st.st_mtime),
                                     str(kind),
                                     int(protected),
-                                    current.depth + 1,
+                                    cdepth + 1,
+                                    1,
                                 )
                             )
-                            if len(pending) >= self.options.batch_size:
+                            if len(pending) >= batch_size:
+                                if profiling:
+                                    mark = time.perf_counter()
                                 self.index.add_entries(scan_id, pending)
                                 pending.clear()
+                                if profiling:
+                                    profiler.add("insert", time.perf_counter() - mark)
                                 # Commit each batch: a scan that holds the
                                 # write lock for its whole duration locks out
                                 # every other process.
                                 self.index.commit()
                 except PermissionError as exc:
-                    skipped.append((current.path, str(exc)))
-                    self.index.add_skipped(scan_id, current.path, str(exc))
+                    skipped.append((cpath, str(exc)))
+                    self.index.add_skipped(scan_id, cpath, str(exc))
                 except OSError as exc:
-                    skipped.append((current.path, str(exc)))
-                    self.index.add_skipped(scan_id, current.path, str(exc))
+                    skipped.append((cpath, str(exc)))
+                    self.index.add_skipped(scan_id, cpath, str(exc))
+
+                # The directory has been walked; it is finished once every
+                # child directory is.
+                cstate.scanned = True
+                if cstate.finished_children == cstate.child_dirs:
+                    self._finish_dir(cstate, profiler)
 
         except ScanCanceledError:
             canceled = True
@@ -292,12 +370,19 @@ class Scanner:
             if pending:
                 self.index.add_entries(scan_id, pending)
                 pending.clear()
+                self.index.commit()
+
+        if profiling:
+            profiler.add("walk", time.perf_counter() - walk_started)
 
         finished = time.time()
 
-        # Roll file sizes up into cumulative directory totals so every view can
-        # read them straight from SQL.
-        self.index.aggregate_scan(scan_id)
+        if canceled:
+            # The walk stopped early, so the directories that were never
+            # finished carry no totals. Roll the files up once more to give
+            # the partial scan the best numbers it can.
+            self.index.aggregate_scan(scan_id)
+
         totals = self.index.root_totals(scan_id)
 
         meta = ScanMeta(
@@ -313,7 +398,11 @@ class Scanner:
             complete=not canceled,
         )
         self.index.finish_scan(scan_id, meta)
-        return ScanResult(meta=meta, skipped=skipped, canceled=canceled)
+
+        timings = profiler.to_dict()
+        if timings:
+            timings["total"] = round(finished - started, 4)
+        return ScanResult(meta=meta, skipped=skipped, canceled=canceled, timings=timings)
 
     # ----------------------------------------------------------------- private
 
@@ -322,37 +411,57 @@ class Scanner:
         scan_id: int,
         parent_id: int | None,
         path: Path,
+        name: str,
         kind: Kind,
         protected: bool,
         depth: int,
-        started: float,
-        state: _RunState,
+        mtime: float,
     ) -> int:
         """Insert a directory row and return its index id."""
-        try:
-            st = path.stat()
-            mtime = float(st.st_mtime)
-        except OSError:
-            mtime = 0.0
-        self.index.add_entries(
+        return self.index.add_entry(
             scan_id,
-            [
-                (
-                    parent_id,
-                    str(path),
-                    path.name,
-                    1,
-                    0,
-                    0,
-                    mtime,
-                    str(kind),
-                    int(protected),
-                    depth,
-                )
-            ],
+            (
+                parent_id,
+                str(path),
+                name,
+                1,
+                0,
+                0,
+                mtime,
+                str(kind),
+                int(protected),
+                depth,
+                0,
+            ),
         )
-        row = self.index.last_entry_id(scan_id)
-        return row
+
+    def _finish_dir(self, dstate: _DirState, profiler: _Profiler) -> None:
+        """Write the totals of a directory whose subtree is complete.
+
+        The totals travel up the tree: a finished directory adds what it holds
+        to its parent, and the parent is finished too once its last child is.
+        """
+        profiling = profiler.enabled
+        while True:
+            size = dstate.own_size + dstate.sub_size
+            on_disk = dstate.own_on_disk + dstate.sub_on_disk
+            files = dstate.own_files + dstate.sub_files
+            if profiling:
+                mark = time.perf_counter()
+            self.index.set_totals(dstate.entry_id, size, on_disk, files, dstate.child_dirs)
+            if profiling:
+                profiler.add("rollup", time.perf_counter() - mark)
+
+            parent = dstate.parent
+            if parent is None:
+                return
+            parent.sub_size += size
+            parent.sub_on_disk += on_disk
+            parent.sub_files += files
+            parent.finished_children += 1
+            if not (parent.scanned and parent.finished_children == parent.child_dirs):
+                return
+            dstate = parent
 
     def _excluded(self, name: str, path: str) -> bool:
         for pattern in self.options.exclude:
@@ -369,7 +478,29 @@ class _PendingDir:
     entry_id: int
     depth: int
     forced: Kind | None
-    protected: bool
+    guard: DirGuard
+    state: _DirState
+
+
+@dataclass(slots=True)
+class _DirState:
+    """The totals of one directory while its subtree is walked."""
+
+    entry_id: int = 0
+    parent: _DirState | None = None
+    #: What the files directly in this directory add up to.
+    own_size: int = 0
+    own_on_disk: int = 0
+    own_files: int = 0
+    #: What the finished child directories brought in.
+    sub_size: int = 0
+    sub_on_disk: int = 0
+    sub_files: int = 0
+    #: How many child directories were found, and how many of them are done.
+    child_dirs: int = 0
+    finished_children: int = 0
+    #: True once the directory itself has been walked.
+    scanned: bool = False
 
 
 @dataclass(slots=True)
@@ -381,7 +512,7 @@ class _RunState:
     folders: int = 0
     bytes_seen: int = 0
     on_disk_seen: int = 0
-    current: Path | None = None
+    current: str | None = None
 
     def snapshot(self) -> ScanProgress:
         return ScanProgress(
@@ -393,10 +524,22 @@ class _RunState:
         )
 
 
+def _mtime(path: Path) -> float:
+    """The modification time of a path, or zero when it cannot be read."""
+    try:
+        return float(path.stat().st_mtime)
+    except OSError:
+        return 0.0
+
+
 def _is_hidden(entry: os.DirEntry[str]) -> bool:
     """True when an entry is hidden by platform convention."""
     if entry.name.startswith("."):
         return True
+    if not hasattr(os.stat_result, "st_file_attributes"):
+        # Only Windows marks entries as hidden with an attribute; everywhere
+        # else the name is the only convention.
+        return False
     try:
         attrs = getattr(entry.stat(follow_symlinks=False), "st_file_attributes", 0)
     except (OSError, AttributeError):

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
 
 from diskgoup.core.models import Kind
-from diskgoup.core.scanner import Scanner, ScanOptions
+from diskgoup.core.scanner import ScanControl, Scanner, ScanOptions
 from diskgoup.core.store import ScanIndex
 
 
@@ -117,3 +118,70 @@ def test_file_root_raises(index: ScanIndex, tree: Path) -> None:
     scanner = Scanner(index, ScanOptions(root=tree / "Videos" / "render.mp4"))
     with pytest.raises(NotADirectoryError):
         scanner.run()
+
+
+def test_directory_counts_are_cumulative(index: ScanIndex, tree: Path) -> None:
+    """Every directory knows its own subtree: the files below it and the
+    number of directories directly inside it."""
+    scan_id = scan(index, tree)
+    rows = {row["path"]: row for row in index.iter_entries(scan_id)}
+
+    def row_for(suffix: str) -> sqlite3.Row:
+        return next(row for path, row in rows.items() if path.endswith(suffix))
+
+    root = row_for(tree.name)
+    assert root["size"] == 5000
+    assert root["file_count"] == 5
+    assert root["dir_count"] == 3  # Downloads, Documents, Videos
+
+    downloads = row_for("Downloads")
+    assert downloads["size"] == 3000
+    assert downloads["file_count"] == 3
+    assert downloads["dir_count"] == 1  # Downloads/Cache
+
+    cache = row_for("Cache")
+    assert cache["size"] == 1000
+    assert cache["file_count"] == 1
+    assert cache["dir_count"] == 0
+
+    work = row_for("Work")
+    assert work["size"] == 1000
+    assert work["file_count"] == 1
+    assert work["dir_count"] == 0
+
+    movie = row_for("movie.mp4")
+    assert movie["file_count"] == 1
+    assert movie["dir_count"] == 0
+    assert movie["size"] == 1000
+
+
+def test_a_stopped_scan_still_reports_what_it_saw(index: ScanIndex, tree: Path) -> None:
+    """A scan that was stopped early keeps the totals of the part it walked."""
+    control = ScanControl()
+    seen = 0
+
+    def on_progress(_progress: object) -> None:
+        nonlocal seen
+        seen += 1
+        # The fixture holds five directories and five files, so stopping after
+        # eight entries always leaves at least one file behind.
+        if seen >= 8:
+            control.cancel()
+
+    result = Scanner(index, ScanOptions(root=tree)).run(on_progress, control=control)
+
+    assert result.canceled is True
+    assert result.meta.complete is False
+    totals = index.root_totals(result.meta.scan_id)
+    assert 0 < totals["size"] <= 5000
+    assert 0 < totals["files"] <= 5
+
+
+def test_a_profiled_scan_reports_where_the_time_went(index: ScanIndex, tree: Path) -> None:
+    scanner = Scanner(index, ScanOptions(root=tree, profile=True))
+    result = scanner.run()
+
+    assert result.timings
+    assert "walk" in result.timings
+    assert "total" in result.timings
+    assert result.timings["total"] >= result.timings["walk"]

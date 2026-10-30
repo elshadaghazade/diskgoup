@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
+import pytest
+
 from diskgoup.core.models import Kind
-from diskgoup.core.protect import is_protected, is_system_path
+from diskgoup.core.protect import (
+    entry_is_protected,
+    guard_for,
+    is_protected,
+    is_system_path,
+)
 
 
 def test_system_roots_are_protected() -> None:
@@ -72,3 +80,46 @@ def test_platform_roots_match_this_platform() -> None:
         assert all(root.startswith("C:\\") for root in roots)
     else:
         assert "/usr" in roots
+
+
+def _fake_stat() -> os.stat_result:
+    """A stat result for a plain, unprotected file."""
+    return os.stat_result((0o100644, 1, 1, 1, 0, 0, 10, 0.0, 0.0, 0.0))
+
+
+#: (parent directory, child path, child name) triples covering the cases the
+#: fast path has to get right: a directory that *is* a system root, a child of
+#: one, a system directory name and ordinary content.
+_FAST_PATH_CASES = (
+    ("/", "/Library", "Library"),
+    ("/", "/Applications", "Applications"),
+    ("/", "/System", "System"),
+    ("/System", "/System/Library", "Library"),
+    ("/private", "/private/var", "var"),
+    ("/private/var", "/private/var/db", "db"),
+    ("/Users/someone", "/Users/someone/Downloads", "Downloads"),
+    ("/Users/someone/Downloads", "/Users/someone/Downloads/movie.mp4", "movie.mp4"),
+    ("/Users/someone", "/Users/someone/System", "System"),
+    ("/Users/someone", "/Users/someone/system32", "system32"),
+    ("/Users/someone", "/Users/someone/notes.txt", "notes.txt"),
+)
+
+
+@pytest.mark.parametrize(("parent", "child", "name"), _FAST_PATH_CASES)
+def test_the_fast_path_agrees_with_the_full_check(parent: str, child: str, name: str) -> None:
+    """The hot path must reach the same verdict as the full check."""
+    guard = guard_for(parent, protected=is_protected(Path(parent)))
+    fast = entry_is_protected(child, name, _fake_stat(), guard)
+    slow = is_protected(Path(parent)) or is_protected(Path(child))
+    assert fast == slow, (parent, child)
+
+
+def test_a_protected_parent_protects_its_children() -> None:
+    guard = guard_for("/System", protected=True)
+    assert entry_is_protected("/System/Library/thing", "thing", _fake_stat(), guard)
+
+
+def test_the_guard_knows_a_system_root() -> None:
+    assert guard_for("/System").under_root
+    assert guard_for("/System/Library").under_root
+    assert not guard_for("/Users/someone").under_root

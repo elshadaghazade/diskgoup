@@ -14,7 +14,6 @@ its whole subtree into the cache group, otherwise the file extension decides.
 from __future__ import annotations
 
 import re
-from pathlib import PurePath
 
 from diskgoup.core.models import Kind
 
@@ -153,11 +152,17 @@ _APP_DIR_RE = re.compile(
 
 
 def classify_extension(name: str) -> Kind:
-    """Return the :class:`Kind` implied by a file name's extension."""
-    suffix = PurePath(name).suffix.lower()
-    if not suffix:
+    """Return the :class:`Kind` implied by a file name's extension.
+
+    The extension is taken straight off the name rather than through
+    :class:`~pathlib.PurePath`, whose parser is pure Python and showed up as a
+    measurable part of the cost of a scan.
+    """
+    dot = name.rfind(".")
+    if dot <= 0:
+        # No dot at all, or a leading dot only — ".bashrc" has no extension.
         return Kind.OTHER
-    return _EXTENSIONS.get(suffix, Kind.OTHER)
+    return _EXTENSIONS.get(name[dot:].lower(), Kind.OTHER)
 
 
 def is_cache_dir(name: str) -> bool:

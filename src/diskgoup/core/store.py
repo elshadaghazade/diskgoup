@@ -55,6 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_entries_scan_size   ON entries(scan_id, size);
 CREATE INDEX IF NOT EXISTS idx_entries_scan_kind   ON entries(scan_id, kind);
 CREATE INDEX IF NOT EXISTS idx_entries_scan_name   ON entries(scan_id, name);
 CREATE INDEX IF NOT EXISTS idx_entries_scan_path   ON entries(scan_id, path);
+CREATE INDEX IF NOT EXISTS idx_entries_scan_depth  ON entries(scan_id, depth);
 
 CREATE TABLE IF NOT EXISTS skipped (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -103,7 +104,14 @@ CREATE INDEX IF NOT EXISTS idx_staged_scan ON staged(scan_id, status);
 """
 
 #: The schema version stored in the index. Bump it when ``_SCHEMA`` changes.
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
+
+#: What each version adds to an index that already has the tables. Applied in
+#: order when an existing index is opened, so an index written by an older
+#: version gains the new indexes instead of being marked as up to date.
+_MIGRATIONS: dict[int, tuple[str, ...]] = {
+    2: ("CREATE INDEX IF NOT EXISTS idx_entries_scan_depth ON entries(scan_id, depth)",),
+}
 
 #: The tables the schema is made of. Their presence says "this index has the
 #: schema" — a read, so opening an index never takes the write lock.
@@ -153,6 +161,9 @@ class ScanIndex:
             # The schema is there; only the marker is missing. Writing it is
             # a nicety, so it must never fail the open.
             try:
+                for target in range(version + 1, _SCHEMA_VERSION + 1):
+                    for statement in _MIGRATIONS.get(target, ()):
+                        self._conn.execute(statement)
                 self._conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
                 self._conn.commit()
             except sqlite3.OperationalError:
@@ -219,16 +230,46 @@ class ScanIndex:
         """Bulk-insert index rows.
 
         Each row is ``(parent_id, path, name, is_dir, size, on_disk, mtime, kind,
-        protected, depth)``.
+        protected, depth, file_count)``.
         """
         self._conn.executemany(
             """
             INSERT INTO entries
                 (scan_id, parent_id, path, name, is_dir, size, on_disk, mtime, kind,
-                 protected, depth)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 protected, depth, file_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             ((scan_id, *row) for row in rows),
+        )
+
+    def add_entry(self, scan_id: int, row: tuple[Any, ...]) -> int:
+        """Insert one index row and return its id.
+
+        The id comes from the insert itself. Asking for it with a second
+        query would be wrong the moment more than one writer exists.
+        """
+        cursor = self._conn.execute(
+            """
+            INSERT INTO entries
+                (scan_id, parent_id, path, name, is_dir, size, on_disk, mtime, kind,
+                 protected, depth, file_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (scan_id, *row),
+        )
+        return int(cursor.lastrowid or 0)
+
+    def set_totals(
+        self, entry_id: int, size: int, on_disk: int, file_count: int, dir_count: int
+    ) -> None:
+        """Write the rolled-up totals of one directory."""
+        self._conn.execute(
+            """
+            UPDATE entries
+               SET size = ?, on_disk = ?, file_count = ?, dir_count = ?
+             WHERE id = ?
+            """,
+            (size, on_disk, file_count, dir_count, entry_id),
         )
 
     def add_skipped(self, scan_id: int, path: Path, reason: str) -> None:
@@ -350,14 +391,6 @@ class ScanIndex:
         ).fetchone()
         return int(row["n"])
 
-    def last_entry_id(self, scan_id: int) -> int:
-        """Id of the most recently inserted entry for a scan."""
-        row = self._conn.execute(
-            "SELECT id FROM entries WHERE scan_id = ? ORDER BY id DESC LIMIT 1",
-            (scan_id,),
-        ).fetchone()
-        return int(row["id"])
-
     def root_totals(self, scan_id: int) -> dict[str, int]:
         """Cumulative totals of the scan root.
 
@@ -394,11 +427,23 @@ class ScanIndex:
     def aggregate_scan(self, scan_id: int) -> None:
         """Roll file sizes up into cumulative directory totals.
 
-        Runs after the walk so that ``entries.size`` holds, for every directory,
-        the total size of everything beneath it. Processing is done one depth
-        level at a time, so memory stays proportional to the widest level rather
-        than to the size of the tree.
+        A scan that ran to the end already has the totals: the scanner writes
+        them while it walks. This is the fallback for a scan that was stopped
+        early — the directories are put back to zero and the file rows are
+        rolled up again, so a partial scan still reports what it did see.
+
+        Processing is done one depth level at a time, so memory stays
+        proportional to the widest level rather than to the size of the tree.
         """
+        self._conn.execute(
+            """
+            UPDATE entries
+               SET size = 0, on_disk = 0, file_count = 0, dir_count = 0
+             WHERE scan_id = ? AND is_dir = 1
+            """,
+            (scan_id,),
+        )
+
         row = self._conn.execute(
             "SELECT MAX(depth) AS d FROM entries WHERE scan_id = ?", (scan_id,)
         ).fetchone()
@@ -427,7 +472,10 @@ class ScanIndex:
                 total_ondisk = int(entry["on_disk"]) + acc_ondisk.get(entry_id, 0)
                 total_files = (0 if is_dir else 1) + acc_files.get(entry_id, 0)
                 total_dirs = acc_dirs.get(entry_id, 0)
-                updates.append((total_size, total_ondisk, total_files, total_dirs, entry_id))
+                if is_dir:
+                    # Files carry their own totals already; only directories
+                    # are rolled up.
+                    updates.append((total_size, total_ondisk, total_files, total_dirs, entry_id))
 
                 parent_id = entry["parent_id"]
                 if parent_id is not None:
