@@ -47,6 +47,7 @@ def scan_command(
     include_hidden: bool = True,
     exclude: list[str] | None = None,
     max_depth: int | None = None,
+    profile: bool = False,
 ) -> None:
     """Scan a drive or folder and store the result in the index."""
     root = Path(path).expanduser()
@@ -61,6 +62,7 @@ def scan_command(
             include_hidden=include_hidden,
             exclude=tuple(exclude or ()),
             max_depth=max_depth,
+            profile=profile,
         )
         scanner = Scanner(index, options)
 
@@ -100,6 +102,11 @@ def scan_command(
         if meta.skipped:
             console.print(f"  [yellow]{meta.skipped:,} entries skipped[/yellow]")
         console.print(f"  [dim]scan id {meta.scan_id}[/dim]")
+        if result.timings:
+            console.print(
+                "  [dim]timings:[/dim] "
+                + " · ".join(f"{name} {seconds:.2f}s" for name, seconds in result.timings.items())
+            )
 
 
 scans_app = typer.Typer(
