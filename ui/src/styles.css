@@ -74,6 +74,12 @@ button {
   -webkit-app-region: no-drag;
 }
 
+/* macOS puts its window controls (close/minimise/zoom) over the top-left of
+   the window, so the brand starts after them. */
+.app-topbar.mac {
+  padding-left: 80px;
+}
+
 .brand {
   display: flex;
   align-items: center;
@@ -328,6 +334,16 @@ button {
   .app-body {
     grid-template-columns: 210px 1fr 260px;
   }
+}
+
+/* Focus mode — the workspace takes the whole width and the side panels hide. */
+.app-body.focus {
+  grid-template-columns: 1fr;
+}
+
+.app-body.focus > .sidebar,
+.app-body.focus > .inspector {
+  display: none;
 }
 
 .sidebar {

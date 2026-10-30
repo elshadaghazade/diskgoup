@@ -46,6 +46,42 @@ export type ScanProgress = {
   elapsed: number
 }
 
+// macOS draws its window controls over the topbar, so the brand needs room
+// for them.
+const IS_MAC = window.diskgoup?.platform === 'darwin'
+
+/** Arrows pointing outward — the side panels hide, the workspace widens. */
+function ExpandIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 14 14" aria-hidden="true">
+      <path
+        d="M4.5 2 1.5 5l3 3M9.5 2l3 3-3 3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/** Arrows pointing inward — the side panels come back. */
+function CollapseIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 14 14" aria-hidden="true">
+      <path
+        d="M1.5 2l3 3-3 3M12.5 2l-3 3 3 3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export default function App() {
   const [tab, setTab] = useState<TabId>('explore')
   const [volumes, setVolumes] = useState<Volume[]>([])
@@ -60,6 +96,7 @@ export default function App() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [pendingRemoval, setPendingRemoval] = useState<ScanMeta | null>(null)
+  const [focus, setFocus] = useState(false)
 
   // Every view reads the scan this points at. The scan id pins the read to
   // one entry in the CLI's index, so opening a stored scan never re-walks
@@ -113,6 +150,17 @@ export default function App() {
       }),
     [],
   )
+
+  // Escape leaves focus mode and brings the side panels back.
+  useEffect(() => {
+    if (!focus) return
+    const onKey = (event: KeyboardEvent) => {
+      // The confirm dialog owns Escape while it is open.
+      if (event.key === 'Escape' && !pendingRemoval) setFocus(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [focus, pendingRemoval])
 
   const runScan = useCallback(async (target: string) => {
     setBusy(true)
@@ -238,7 +286,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="app-topbar">
+      <header className={`app-topbar${IS_MAC ? ' mac' : ''}`}>
         <div className="brand">
           <span className="brand-mark">D</span>
           DiskGOup
@@ -271,6 +319,16 @@ export default function App() {
             />
           </label>
         )}
+
+        <button
+          className="icon-button"
+          onClick={() => setFocus((value) => !value)}
+          title={focus ? 'Show the side panels (Esc)' : 'Hide the side panels'}
+          aria-label={focus ? 'Show the side panels' : 'Hide the side panels'}
+          aria-pressed={focus}
+        >
+          {focus ? <CollapseIcon /> : <ExpandIcon />}
+        </button>
       </header>
 
       {progress && (
@@ -300,7 +358,7 @@ export default function App() {
         </div>
       )}
 
-      <div className="app-body">
+      <div className={`app-body${focus ? ' focus' : ''}`}>
         <Sidebar
           volumes={volumes}
           scans={scans}

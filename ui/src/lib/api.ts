@@ -27,6 +27,7 @@ import type {
 export type RpcResult<T> = { ok: true; result: T } | { ok: false; error: string }
 
 type Bridge = {
+  platform: string
   call: <T = unknown>(
     method: string,
     params?: Record<string, unknown>,
