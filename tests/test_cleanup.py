@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from diskgoup.commands.serve import Server
 from diskgoup.core.cleanup import clear, commit, stage, staged_items, unstage, validate
 from diskgoup.core.scanner import Scanner, ScanOptions
 from diskgoup.core.store import ScanIndex
@@ -118,3 +119,42 @@ def test_commit_reports_a_failure_without_raising(
 
     assert result.moved == []
     assert result.issues
+
+
+def test_the_rpc_stages_and_takes_items_back(
+    tmp_path: Path, scanned: tuple[ScanIndex, int, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The desktop app stages a selection, then can undo it."""
+    _, _, root = scanned
+    db = tmp_path / "index.db"
+    monkeypatch.setenv("DISKGOUP_INDEX", str(db))
+    with ScanIndex(db) as index:
+        scan_id = Scanner(index, ScanOptions(root=root)).run().meta.scan_id
+
+    response = Server().handle(
+        {
+            "id": 1,
+            "method": "cleanup.stage",
+            "params": {"scan_id": scan_id, "paths": [str(root / "junk.bin")]},
+        }
+    )
+
+    assert response is not None
+    assert "error" not in response, response
+    assert [item["path"] for item in response["result"]["staged"]] == [str(root / "junk.bin")]
+
+    response = Server().handle(
+        {
+            "id": 2,
+            "method": "cleanup.unstage",
+            "params": {"scan_id": scan_id, "paths": [str(root / "junk.bin")]},
+        }
+    )
+
+    assert response is not None
+    assert response["result"]["removed"] == 1
+
+    response = Server().handle({"id": 3, "method": "cleanup.list", "params": {"scan_id": scan_id}})
+
+    assert response is not None
+    assert response["result"]["items"] == []

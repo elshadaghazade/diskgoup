@@ -36,6 +36,7 @@ import threading
 import time
 import traceback
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 import typer
@@ -77,6 +78,7 @@ class Server:
                 "scan.resume": self._scan_resume,
                 "scan.cancel": self._scan_cancel,
                 "explore.tree": self._explore_tree,
+                "explore.children": self._explore_children,
                 "explore.sizes": self._explore_sizes,
                 "explore.types": self._explore_types,
                 "explore.age": self._explore_age,
@@ -94,6 +96,7 @@ class Server:
                 "reports.weekly": self._reports_weekly,
                 "reports.types": self._reports_types,
                 "cleanup.stage": self._cleanup_stage,
+                "cleanup.unstage": self._cleanup_unstage,
                 "cleanup.list": self._cleanup_list,
                 "cleanup.validate": self._cleanup_validate,
                 "cleanup.commit": self._cleanup_commit,
@@ -294,6 +297,50 @@ class Server:
             meta = self._scan_for(index, params)
             root = index.build_tree(meta.scan_id)
             return {"scan": meta.to_dict(), "tree": root.to_dict() if root else None}
+
+    def _explore_children(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
+        """List what is inside one folder of a scan.
+
+        The listing comes from the index, so browsing a folder never re-walks
+        the disk. The scan is pinned by ``scan_id``; the path is only the folder
+        to open.
+        """
+        with self._index() as index:
+            meta = self._scan_for(index, params)
+            root = Path(meta.root)
+            target = Path(params.get("path") or meta.root)
+
+            row = index.entry_by_path(meta.scan_id, target)
+            if row is None:
+                raise ValueError(f"{target} is not in scan #{meta.scan_id}")
+
+            entries: list[dict[str, Any]] = [
+                {
+                    "name": str(child["name"]),
+                    "path": str(child["path"]),
+                    "is_dir": bool(child["is_dir"]),
+                    "size": int(child["size"]),
+                    "on_disk": int(child["on_disk"]),
+                    "kind": str(child["kind"]),
+                    "protected": bool(child["protected"]),
+                    "mtime": float(child["mtime"]),
+                    "files": int(child["file_count"]),
+                    "folders": int(child["dir_count"]),
+                }
+                for child in index.children(meta.scan_id, int(row["id"]))
+            ]
+            # Folders first, then files — each group by size, the way a file
+            # manager shows them.
+            entries.sort(key=lambda entry: (not entry["is_dir"], -entry["size"], entry["name"]))
+
+            path = str(row["path"])
+            return {
+                "scan": meta.to_dict(),
+                "path": path,
+                "parent": _parent_path(root, path),
+                "crumbs": _crumbs(root, path),
+                "entries": entries,
+            }
 
     def _explore_sizes(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
         from diskgoup.util.humanize import human_bytes
@@ -567,6 +614,15 @@ class Server:
                 "refused": [issue.to_dict() for issue in refused],
             }
 
+    def _cleanup_unstage(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
+        """Take items back off the review list."""
+        from diskgoup.core.cleanup import unstage
+
+        with self._index() as index:
+            meta = self._scan_for(index, params)
+            paths = [Path(p) for p in params.get("paths", [])]
+            return {"scan": meta.to_dict(), "removed": unstage(index, meta.scan_id, paths)}
+
     def _cleanup_list(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
         from diskgoup.core.cleanup import staged_items
 
@@ -603,6 +659,33 @@ class Server:
                 permanent=bool(params.get("permanent", False)),
             )
             return {"scan": meta.to_dict(), **result.to_dict()}
+
+
+def _parent_path(root: Path, path: str) -> str | None:
+    """The folder one level up, or ``None`` when the folder is the scan root."""
+    if Path(path) == root:
+        return None
+    return str(Path(path).parent)
+
+
+def _crumbs(root: Path, path: str) -> list[dict[str, str]]:
+    """The ancestor chain of a folder, from the scan root down to it.
+
+    This is what the GUI shows as a breadcrumb: every step is a path that can
+    be opened again.
+    """
+    crumbs: list[dict[str, str]] = []
+    current = Path(path)
+    while True:
+        crumbs.append({"name": current.name or str(current), "path": str(current)})
+        if current == root:
+            break
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    crumbs.reverse()
+    return crumbs
 
 
 #: Guards stdout: the read loop and the scan worker both write to it.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from './lib/api'
 import { bytes, count, duration, shortenPath, tailPath } from './lib/format'
-import type { BackendStatus, ScanMeta, ScanRef, Volume } from './lib/types'
+import type { BackendStatus, BrowserEntry, ScanMeta, ScanRef, Volume } from './lib/types'
 import Sidebar from './components/Sidebar'
 import ConfirmDialog from './components/ConfirmDialog'
 import Inspector from './components/Inspector'
@@ -97,6 +97,8 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [pendingRemoval, setPendingRemoval] = useState<ScanMeta | null>(null)
   const [focus, setFocus] = useState(false)
+  // The entry the user selected in the folder browser — the inspector shows it.
+  const [selected, setSelected] = useState<BrowserEntry | null>(null)
 
   // Every view reads the scan this points at. The scan id pins the read to
   // one entry in the CLI's index, so opening a stored scan never re-walks
@@ -171,6 +173,7 @@ export default function App() {
     try {
       const result = await api.scan(target)
       setScan(result)
+      setSelected(null)
       setProgress(null)
       setMessage(
         result.canceled
@@ -221,6 +224,7 @@ export default function App() {
   /** Open a scan that is already in the index — no new walk. */
   const onOpenScan = useCallback((meta: ScanMeta) => {
     setScan(meta)
+    setSelected(null)
     setError('')
     setMessage(`Scan #${meta.scan_id} · ${meta.root}`)
   }, [])
@@ -262,7 +266,15 @@ export default function App() {
   const tabContent = useMemo(() => {
     switch (tab) {
       case 'explore':
-        return <ExploreTab scanRef={scanRef} scan={scan} scans={scans} filter={filter} />
+        return (
+          <ExploreTab
+            scanRef={scanRef}
+            scan={scan}
+            scans={scans}
+            filter={filter}
+            onSelect={setSelected}
+          />
+        )
       case 'search':
         return <SearchTab scanRef={scanRef} scan={scan} />
       case 'archives':
@@ -299,7 +311,10 @@ export default function App() {
               role="tab"
               aria-selected={tab === item.id}
               className="tab"
-              onClick={() => setTab(item.id)}
+              onClick={() => {
+                setTab(item.id)
+                setSelected(null)
+              }}
             >
               {item.label}
             </button>
@@ -371,7 +386,7 @@ export default function App() {
 
         <main className="workspace">{tabContent}</main>
 
-        <Inspector scan={scan} />
+        <Inspector scan={scan} selected={selected} />
       </div>
 
       <footer className="status-bar">
