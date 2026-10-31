@@ -15,6 +15,7 @@ saves) can never be staged. Cancelling leaves every file exactly where it was.
 
 from __future__ import annotations
 
+import shutil
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -206,7 +207,7 @@ def commit(
     for item in valid:
         try:
             if permanent:
-                item.path.unlink()
+                _remove(item.path)
             else:
                 _to_trash(item.path)
         except OSError as exc:
@@ -262,3 +263,16 @@ def _to_trash(path: Path) -> None:
     except ImportError as exc:  # pragma: no cover - dependency is declared
         raise CleanupError("send2trash is unavailable — refusing to delete permanently.") from exc
     send2trash(str(path))
+
+
+def _remove(path: Path) -> None:
+    """Remove a path for good.
+
+    A file goes with ``unlink()``; a folder needs the whole tree, because
+    ``unlink()`` cannot remove a directory — it fails with "Operation not
+    permitted" on macOS.
+    """
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path)
+    else:
+        path.unlink()

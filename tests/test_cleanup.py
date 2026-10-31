@@ -121,6 +121,29 @@ def test_commit_reports_a_failure_without_raising(
     assert result.issues
 
 
+def test_commit_removes_a_folder_and_its_content(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """A folder can be deleted for good — it needs more than unlink()."""
+    root = tmp_path_factory.mktemp("folder")
+    folder = root / "normal_folder"
+    (folder / "inner").mkdir(parents=True)
+    (folder / "inner" / "file.bin").write_bytes(b"z" * 128)
+
+    index = ScanIndex(tmp_path_factory.mktemp("idx") / "index.db")
+    scanner = Scanner(index, ScanOptions(root=root))
+    scan_id = scanner.run().meta.scan_id
+
+    added, refused = stage(index, scan_id, [folder])
+    assert added and not refused
+
+    result = commit(index, scan_id, permanent=True)
+
+    assert result.moved == [folder]
+    assert not folder.exists()
+    assert result.failed == []
+
+
 def test_the_rpc_stages_and_takes_items_back(
     tmp_path: Path, scanned: tuple[ScanIndex, int, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
