@@ -115,13 +115,29 @@ export const api = {
   /**
    * The contents of one folder of the scan.
    *
-   * Read from the index — opening a folder never re-walks the disk.
+   * Read from the index — opening a folder never re-walks the disk, unless
+   * the folder changed and is small enough to be refreshed on the spot.
    */
   browse: (ref: ScanRef, path: string) =>
     call<import('./types').BrowserFolder>('explore.children', {
       ...refParams(ref),
       path,
     }),
+
+  /**
+   * Walk one folder of the scan again and correct the index.
+   *
+   * Only the folder is walked — the rest of the scan keeps what it holds.
+   */
+  refresh: (ref: ScanRef, path: string) =>
+    call<{
+      scan: ScanMeta
+      path: string
+      files: number
+      folders: number
+      bytes: number
+      changed: boolean
+    }>('scan.refresh', { ...refParams(ref), path }),
   sizes: (ref: ScanRef, limit = 50) =>
     call<{ scan: ScanMeta; entries: SizeEntry[] }>('explore.sizes', {
       ...refParams(ref),

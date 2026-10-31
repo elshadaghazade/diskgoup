@@ -8,9 +8,11 @@ perspectives" promise real.
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -30,7 +32,8 @@ CREATE TABLE IF NOT EXISTS scans (
     file_count   INTEGER NOT NULL DEFAULT 0,
     dir_count    INTEGER NOT NULL DEFAULT 0,
     skipped      INTEGER NOT NULL DEFAULT 0,
-    complete     INTEGER NOT NULL DEFAULT 0
+    complete     INTEGER NOT NULL DEFAULT 0,
+    options      TEXT
 );
 
 CREATE TABLE IF NOT EXISTS entries (
@@ -104,7 +107,7 @@ CREATE INDEX IF NOT EXISTS idx_staged_scan ON staged(scan_id, status);
 """
 
 #: The schema version stored in the index. Bump it when ``_SCHEMA`` changes.
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 
 #: The children of one folder.
 #:
@@ -122,7 +125,22 @@ _CHILDREN_SQL = "SELECT * FROM entries WHERE scan_id = ? AND parent_id = ?"
 #: version gains the new indexes instead of being marked as up to date.
 _MIGRATIONS: dict[int, tuple[str, ...]] = {
     2: ("CREATE INDEX IF NOT EXISTS idx_entries_scan_depth ON entries(scan_id, depth)",),
+    3: ("ALTER TABLE scans ADD COLUMN options TEXT",),
 }
+
+#: The rows of a subtree, from one entry down.
+#:
+#: The recursive step joins on ``parent_id``, which the index on
+#: ``(scan_id, parent_id)`` answers directly, so a subtree is found without
+#: walking the rest of the scan.
+_SUBTREE_SQL = """
+WITH RECURSIVE sub(id) AS (
+    SELECT id FROM entries WHERE scan_id = ? AND id = ?
+    UNION ALL
+    SELECT e.id FROM entries e JOIN sub s ON e.parent_id = s.id WHERE e.scan_id = ?
+)
+SELECT id FROM sub
+"""
 
 #: The tables the schema is made of. Their presence says "this index has the
 #: schema" — a read, so opening an index never takes the write lock.
@@ -138,6 +156,31 @@ _SCHEMA_TABLES = (
 
 #: How many times to retry creating the schema when the index is locked.
 _SCHEMA_ATTEMPTS = 5
+
+
+@dataclass(frozen=True, slots=True)
+class SubtreeTotals:
+    """What one subtree of a scan holds.
+
+    ``size``, ``on_disk`` and ``file_count`` are the rolled-up totals of the
+    entry the subtree starts at — for a directory that is the whole subtree,
+    for a file it is the file itself. ``dir_count`` counts the directories
+    *below* that entry, so the entry itself is not counted twice.
+    """
+
+    size: int = 0
+    on_disk: int = 0
+    file_count: int = 0
+    dir_count: int = 0
+
+    def __sub__(self, other: SubtreeTotals) -> SubtreeTotals:
+        """The difference between two sets of totals."""
+        return SubtreeTotals(
+            size=self.size - other.size,
+            on_disk=self.on_disk - other.on_disk,
+            file_count=self.file_count - other.file_count,
+            dir_count=self.dir_count - other.dir_count,
+        )
 
 
 class ScanIndex:
@@ -228,14 +271,31 @@ class ScanIndex:
 
     # ------------------------------------------------------------------- scans
 
-    def begin_scan(self, root: Path) -> int:
-        """Open a new scan for ``root`` and return its id."""
+    def begin_scan(self, root: Path, options: dict[str, Any] | None = None) -> int:
+        """Open a new scan for ``root`` and return its id.
+
+        The options the scan ran with are stored with it: a refresh of one
+        folder has to walk it the same way the scan did, or the index would
+        hold two different views of the same tree.
+        """
         cursor = self._conn.execute(
-            "INSERT INTO scans (root, started_at) VALUES (?, ?)",
-            (str(root), time.time()),
+            "INSERT INTO scans (root, started_at, options) VALUES (?, ?, ?)",
+            (str(root), time.time(), json.dumps(options or {}, sort_keys=True)),
         )
         self._conn.commit()
         return int(cursor.lastrowid or 0)
+
+    def scan_options(self, scan_id: int) -> dict[str, Any]:
+        """The options a scan ran with — empty when it was made before they
+        were recorded."""
+        row = self._conn.execute("SELECT options FROM scans WHERE id = ?", (scan_id,)).fetchone()
+        if row is None or not row["options"]:
+            return {}
+        try:
+            data = json.loads(str(row["options"]))
+        except json.JSONDecodeError:
+            return {}
+        return data if isinstance(data, dict) else {}
 
     def add_entries(self, scan_id: int, rows: Iterable[tuple[Any, ...]]) -> None:
         """Bulk-insert index rows.
@@ -363,6 +423,23 @@ class ScanIndex:
         self._conn.execute("DELETE FROM scans WHERE id = ?", (scan_id,))
         self._conn.commit()
 
+    def scan_for_path(self, path: Path | str) -> ScanMeta | None:
+        """The most recent scan that covers a path.
+
+        A scan covers a path when the path is inside the tree it walked. This
+        is what finds the scan a folder belongs to — the refresh of one
+        folder needs the scan that holds it, not a scan of the folder itself.
+        """
+        target = str(path)
+        rows = self._conn.execute(
+            "SELECT id, root FROM scans WHERE complete = 1 ORDER BY id DESC"
+        ).fetchall()
+        for row in rows:
+            root = str(row["root"]).rstrip("/")
+            if target == root or target.startswith(root + "/"):
+                return self.scan_meta(int(row["id"]))
+        return None
+
     # ----------------------------------------------------------------- entries
 
     def root_entry(self, scan_id: int) -> sqlite3.Row | None:
@@ -432,6 +509,158 @@ class ScanIndex:
             "SELECT path, reason FROM skipped WHERE scan_id = ? ORDER BY path",
             (scan_id,),
         ).fetchall()
+
+    # ---------------------------------------------------------------- subtrees
+
+    def subtree_ids(self, scan_id: int, entry_id: int) -> list[int]:
+        """The ids of an entry and everything below it."""
+        rows = self._conn.execute(_SUBTREE_SQL, (scan_id, entry_id, scan_id)).fetchall()
+        return [int(row["id"]) for row in rows]
+
+    def ancestor_ids(self, scan_id: int, entry_id: int) -> list[int]:
+        """The ids of the folders that hold an entry, closest first."""
+        ids: list[int] = []
+        current = entry_id
+        while True:
+            row = self._conn.execute(
+                "SELECT parent_id FROM entries WHERE id = ? AND scan_id = ?",
+                (current, scan_id),
+            ).fetchone()
+            if row is None or row["parent_id"] is None:
+                return ids
+            current = int(row["parent_id"])
+            ids.append(current)
+
+    def subtree_totals(self, scan_id: int, entry_id: int) -> SubtreeTotals:
+        """What the subtree of an entry holds.
+
+        The sizes come from the entry's own row — a directory row carries the
+        totals of its whole subtree — and the folders are counted in the
+        subtree below it.
+        """
+        row = self._conn.execute(
+            "SELECT size, on_disk, file_count FROM entries WHERE id = ?",
+            (entry_id,),
+        ).fetchone()
+        if row is None:
+            return SubtreeTotals()
+        dirs = self._conn.execute(
+            """
+            WITH RECURSIVE sub(id) AS (
+                SELECT id FROM entries WHERE scan_id = ? AND id = ?
+                UNION ALL
+                SELECT e.id FROM entries e JOIN sub s ON e.parent_id = s.id WHERE e.scan_id = ?
+            )
+            SELECT COUNT(*) FROM entries
+             WHERE scan_id = ? AND is_dir = 1 AND id != ? AND id IN (SELECT id FROM sub)
+            """,
+            (scan_id, entry_id, scan_id, scan_id, entry_id),
+        ).fetchone()
+        return SubtreeTotals(
+            size=int(row["size"]),
+            on_disk=int(row["on_disk"]),
+            file_count=int(row["file_count"]),
+            dir_count=int(dirs[0] or 0),
+        )
+
+    def delete_subtree(self, scan_id: int, entry_id: int, *, keep_top: bool) -> None:
+        """Delete the rows of a subtree.
+
+        The entry's own row stays when ``keep_top`` is set — that is what a
+        refresh does: the folder keeps its row and gets new ones below it.
+        """
+        ids = self.subtree_ids(scan_id, entry_id)
+        if keep_top:
+            ids = [entry for entry in ids if entry != entry_id]
+        if ids:
+            self._conn.executemany("DELETE FROM entries WHERE id = ?", [(i,) for i in ids])
+
+    def add_to_totals(self, entry_ids: Iterable[int], size: int, on_disk: int, files: int) -> None:
+        """Apply a delta to the rolled-up totals of a few folders."""
+        self._conn.executemany(
+            """
+            UPDATE entries
+               SET size = size + ?, on_disk = on_disk + ?, file_count = file_count + ?
+             WHERE id = ?
+            """,
+            [(size, on_disk, files, entry_id) for entry_id in entry_ids],
+        )
+
+    def add_to_scan_totals(
+        self, scan_id: int, size: int, on_disk: int, files: int, folders: int
+    ) -> None:
+        """Apply a delta to the totals of a scan."""
+        self._conn.execute(
+            """
+            UPDATE scans
+               SET total_size = total_size + ?, total_on_disk = total_on_disk + ?,
+                   file_count = file_count + ?, dir_count = dir_count + ?
+             WHERE id = ?
+            """,
+            (size, on_disk, files, folders, scan_id),
+        )
+
+    def apply_subtree_delta(self, scan_id: int, entry_id: int, delta: SubtreeTotals) -> None:
+        """Correct everything that holds a subtree.
+
+        ``delta`` is what the subtree lost — the difference between what it
+        held before and what it holds now. Every ancestor and the scan itself
+        carried the old totals and have to carry the new ones.
+        """
+        self.add_to_totals(
+            self.ancestor_ids(scan_id, entry_id),
+            -delta.size,
+            -delta.on_disk,
+            -delta.file_count,
+        )
+        self.add_to_scan_totals(
+            scan_id, -delta.size, -delta.on_disk, -delta.file_count, -delta.dir_count
+        )
+        self._conn.commit()
+
+    def update_entry_mtime(self, entry_id: int, mtime: float) -> None:
+        """Write the modification time of a folder back to its row."""
+        self._conn.execute("UPDATE entries SET mtime = ? WHERE id = ?", (mtime, entry_id))
+
+    def remove_entry(self, scan_id: int, entry_id: int) -> SubtreeTotals:
+        """Take an entry — and everything below it — out of the index.
+
+        The rows are deleted and every ancestor's rolled-up totals are
+        corrected, so the index keeps telling the truth about the disk after
+        a cleanup.
+        """
+        row = self._conn.execute(
+            "SELECT parent_id, is_dir FROM entries WHERE id = ?",
+            (entry_id,),
+        ).fetchone()
+        if row is None:
+            raise KeyError(f"no entry with id {entry_id}")
+
+        totals = self.subtree_totals(scan_id, entry_id)
+        is_dir = bool(row["is_dir"])
+        is_root = row["parent_id"] is None
+        ancestors = self.ancestor_ids(scan_id, entry_id)
+
+        self.delete_subtree(scan_id, entry_id, keep_top=False)
+
+        # Every ancestor held the removed subtree in its totals.
+        self.add_to_totals(ancestors, -totals.size, -totals.on_disk, -totals.file_count)
+
+        # The folder that held it loses one immediate subfolder.
+        if is_dir and not is_root:
+            self._conn.execute(
+                "UPDATE entries SET dir_count = dir_count - 1 WHERE id = ?",
+                (int(row["parent_id"]),),
+            )
+
+        # The scan loses the folders the entry held. The scan root itself is
+        # not one of them — it is the tree the scan is about.
+        folders = totals.dir_count + (1 if is_dir and not is_root else 0)
+        self.add_to_scan_totals(
+            scan_id, -totals.size, -totals.on_disk, -totals.file_count, -folders
+        )
+        self._conn.commit()
+        return totals
 
     # -------------------------------------------------------------------- tree
 

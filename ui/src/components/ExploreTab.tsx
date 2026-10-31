@@ -49,9 +49,11 @@ type Props = {
   filter: string
   /** The entry the user touched in the browser — the inspector shows it. */
   onSelect: (entry: BrowserEntry | null) => void
+  /** The scan got new totals — a refresh or a cleanup corrected them. */
+  onScan: (scan: ScanMeta) => void
 }
 
-export default function ExploreTab({ scanRef, scan, scans, filter, onSelect }: Props) {
+export default function ExploreTab({ scanRef, scan, scans, filter, onSelect, onScan }: Props) {
   const [view, setView] = useState<ViewId>('folders')
   const [sizes, setSizes] = useState<SizeEntry[]>([])
   const [layout, setLayout] = useState<LayoutResponse | null>(null)
@@ -139,7 +141,7 @@ export default function ExploreTab({ scanRef, scan, scans, filter, onSelect }: P
       </div>
 
       {view === 'folders' ? (
-        <Browser scanRef={scanRef} scan={scan} filter={filter} onSelect={onSelect} />
+        <Browser scanRef={scanRef} scan={scan} filter={filter} onSelect={onSelect} onScan={onScan} />
       ) : (
         <div className="workspace-content">
           {error && <div className="form-error">{error}</div>}

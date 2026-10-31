@@ -10,6 +10,13 @@ type Props = {
   filter: string
   /** The entry the user last touched — the inspector shows it. */
   onSelect: (entry: BrowserEntry | null) => void
+  /**
+   * The scan got new totals.
+   *
+   * A refresh or a cleanup corrects the totals in the index, and the listing
+   * carries the corrected ones — the rest of the app has to follow.
+   */
+  onScan: (scan: ScanMeta) => void
 }
 
 /** How many cards are drawn for one folder. */
@@ -23,7 +30,7 @@ const LIMIT = 1000
  * level higher. Everything is read from the scan index, so opening a folder
  * never touches the disk.
  */
-export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
+export default function Browser({ scanRef, scan, filter, onSelect, onScan }: Props) {
   const [folder, setFolder] = useState<BrowserFolder | null>(null)
   const [selected, setSelected] = useState<string[]>([])
   const [focused, setFocused] = useState<BrowserEntry | null>(null)
@@ -48,7 +55,7 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
 
   /** Open a folder in place. */
   const load = useCallback(
-    (target: string) => {
+    (target: string, note?: string) => {
       if (!scanRef) return
       const id = ++request.current
       setLoading(true)
@@ -58,6 +65,10 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
         .then((result) => {
           if (id !== request.current) return
           show(result)
+          // The listing carries the totals the index holds now — a refresh
+          // or a cleanup may have corrected them.
+          onScan(result.scan)
+          if (note) setNote(note)
           setLoading(false)
         })
         .catch((err: Error) => {
@@ -66,7 +77,7 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
           setLoading(false)
         })
     },
-    [scanRef, show],
+    [scanRef, show, onScan],
   )
 
   // Open the scan root whenever the scan changes.
@@ -159,15 +170,41 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
     }
   }
 
-  /** The items were moved to the recycle bin — take them off the screen. */
+  /**
+   * Walk the folder again and correct the index.
+   *
+   * Only this folder is walked — the rest of the scan keeps what it holds,
+   * and the totals are corrected by the difference.
+   */
+  const onRefresh = async () => {
+    if (!scanRef || !folder) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await api.refresh(scanRef, folder.path)
+      load(
+        folder.path,
+        `Refreshed — ${count(result.files)} file${result.files === 1 ? '' : 's'}.`,
+      )
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** The items were moved to the recycle bin — the index dropped their rows. */
   const onCommitted = (moved: string[]) => {
     setGone((current) => [...current, ...moved])
     setSelected((current) => current.filter((path) => !moved.includes(path)))
     setReviewing(false)
-    setNote(
-      `${count(moved.length)} item${moved.length > 1 ? 's' : ''} moved to the recycle bin. ` +
-        'The scan still lists them until it is refreshed.',
-    )
+    const note = `${count(moved.length)} item${moved.length > 1 ? 's' : ''} moved to the recycle bin.`
+    if (folder) {
+      // The index no longer lists what was removed — read the folder again.
+      load(folder.path, note)
+    } else {
+      setNote(note)
+    }
   }
 
   if (!scanRef || !scan) return null
@@ -214,6 +251,14 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
             ↑ Up
           </button>
           <button
+            className="button small"
+            onClick={() => void onRefresh()}
+            disabled={loading || busy || !folder}
+            title="Walk this folder again and update the index"
+          >
+            ↻ Refresh
+          </button>
+          <button
             className="button small danger"
             onClick={() => void onClean()}
             disabled={loading || selected.length === 0 || busy}
@@ -225,6 +270,11 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
       </div>
 
       {note && <div className="browser-note">{note}</div>}
+      {folder?.stale && (
+        <div className="browser-note">
+          This folder changed on the disk. Refresh it to bring the index up to date.
+        </div>
+      )}
       {error && <div className="form-error">{error}</div>}
 
       <div className="workspace-content">

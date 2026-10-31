@@ -218,9 +218,41 @@ def commit(
             "UPDATE staged SET status = 'removed' WHERE scan_id = ? AND path = ?",
             (scan_id, str(item.path)),
         )
+        _forget(index, scan_id, item.path)
 
     index.connection.commit()
     return result
+
+
+def _forget(index: ScanIndex, scan_id: int, path: Path) -> None:
+    """Take a removed path out of the index.
+
+    The rows of the item — and of everything below it — are deleted and the
+    totals of the folders that held it are corrected, so the index keeps
+    telling the truth about the disk. Without this the scan would still
+    list what was just cleaned, and the totals would keep counting it.
+    """
+    row = index.entry_by_path(scan_id, path)
+    if row is None:
+        # The path was not part of the scan — nothing to forget.
+        return
+
+    parent_id = row["parent_id"]
+    index.remove_entry(scan_id, int(row["id"]))
+
+    if parent_id is not None:
+        # The folder that held the item changed — its modification time is
+        # now the one the scan would record, so it is not stale any more.
+        index.update_entry_mtime(int(parent_id), _folder_mtime(path.parent))
+    index.commit()
+
+
+def _folder_mtime(path: Path) -> float:
+    """The modification time of a folder, or zero when it cannot be read."""
+    try:
+        return float(path.stat().st_mtime)
+    except OSError:
+        return 0.0
 
 
 def _to_trash(path: Path) -> None:
