@@ -105,9 +105,18 @@ export default function App() {
   // Every view reads the scan this points at. The scan id pins the read to
   // one entry in the CLI's index, so opening a stored scan never re-walks
   // the disk.
+  //
+  // The reference depends on *which* scan is open, not on its numbers: a
+  // refresh or a cleanup corrects the totals of the open scan, and that must
+  // not send the browser back to the scan root.
+  const openRoot = scan?.root
+  const openScanId = scan?.scan_id
   const scanRef = useMemo<ScanRef | null>(
-    () => (scan ? { path: scan.root, scanId: scan.scan_id } : null),
-    [scan],
+    () =>
+      openRoot !== undefined && openScanId !== undefined
+        ? { path: openRoot, scanId: openScanId }
+        : null,
+    [openRoot, openScanId],
   )
 
   useEffect(() => {
@@ -268,6 +277,17 @@ export default function App() {
     }
   }, [pendingRemoval, removingScan, scan])
 
+  /**
+   * The open scan has new numbers.
+   *
+   * A refresh or a cleanup corrects the totals in the index — the header, the
+   * inspector and the sidebar read them from here, so they have to follow.
+   */
+  const applyScan = useCallback((meta: ScanMeta) => {
+    setScan((current) => (current && current.scan_id === meta.scan_id ? meta : current))
+    setScans((current) => current.map((item) => (item.scan_id === meta.scan_id ? meta : item)))
+  }, [])
+
   const tabContent = useMemo(() => {
     switch (tab) {
       case 'explore':
@@ -278,6 +298,7 @@ export default function App() {
             scans={scans}
             filter={filter}
             onSelect={setSelected}
+            onScan={applyScan}
           />
         )
       case 'search':
@@ -299,7 +320,7 @@ export default function App() {
       default:
         return null
     }
-  }, [tab, scanRef, scan, scans, filter, onOpenScan])
+  }, [tab, scanRef, scan, scans, filter, onOpenScan, applyScan])
 
   return (
     <div className="app">
