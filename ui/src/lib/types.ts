@@ -72,6 +72,8 @@ export type BrowserEntry = {
   on_disk: number
   kind: string
   protected: boolean
+  /** The item is a container the system needs — it cannot be cleaned. */
+  critical: boolean
   mtime: number
   files: number
   folders: number
@@ -89,6 +91,11 @@ export type BrowserFolder = {
   path: string
   parent: string | null
   crumbs: Crumb[]
+  /**
+   * The folder changed on disk and is too big to be refreshed on its own.
+   * The user can refresh it by hand.
+   */
+  stale: boolean
   entries: BrowserEntry[]
 }
 

@@ -7,9 +7,9 @@ from pathlib import Path
 import typer
 from rich.table import Table
 
-from diskgoup.commands.common import console, emit, fail, is_json, open_index
+from diskgoup.commands.common import console, emit, ensure_scan, fail, is_json, open_index
 from diskgoup.core.partitions import volumes
-from diskgoup.core.scanner import Scanner, ScanOptions, ScanProgress
+from diskgoup.core.scanner import Scanner, ScanOptions, ScanProgress, is_stale, refresh_subtree
 from diskgoup.util.humanize import human_bytes, human_duration
 
 
@@ -109,6 +109,62 @@ def scan_command(
             )
 
 
+def refresh_command(
+    path: str,
+    scan_id: int | None = typer.Option(None, help="Refresh this scan."),
+    force: bool = typer.Option(False, "--force", help="Refresh even when nothing changed."),
+) -> None:
+    """Walk one folder of a scan again and correct the index.
+
+    Only the folder is walked — the rest of the scan keeps what it holds, and
+    the totals are corrected by the difference.
+    """
+    target = Path(path).expanduser()
+    if not target.exists():
+        fail(f"path does not exist: {target}")
+    target = target.resolve()
+
+    with open_index() as index:
+        if scan_id is not None:
+            meta = index.scan_meta(scan_id)
+            if meta is None:
+                fail(f"no scan with id {scan_id}")
+        else:
+            meta = index.scan_for_path(target)
+            if meta is None:
+                # Nothing holds this path yet — scan it.
+                meta = ensure_scan(index, target, show_progress=not is_json())
+
+        row = index.entry_by_path(meta.scan_id, target)
+        if row is None:
+            fail(f"{target} is not in scan {meta.scan_id}")
+        if not row["is_dir"]:
+            fail(f"{target} is not a folder")
+
+        if not force and not is_stale(index, meta.scan_id, target):
+            if is_json():
+                emit({"scan": meta.to_dict(), "refreshed": False, "reason": "nothing changed"})
+                return
+            console.print(f"[dim]{target} has not changed since scan {meta.scan_id}.[/dim]")
+            return
+
+        result = refresh_subtree(index, meta.scan_id, target)
+        updated = index.scan_meta(meta.scan_id)
+
+        if is_json():
+            emit({"scan": updated.to_dict() if updated else meta.to_dict(), **result.to_dict()})
+            return
+
+        console.print(f"[bold green]✔[/bold green] refreshed [bold]{target}[/bold]")
+        console.print(
+            f"  {result.files:,} files · {result.folders:,} folders · {human_bytes(result.bytes)}"
+        )
+        if result.changed:
+            console.print("  [yellow]the folder changed — the index was corrected[/yellow]")
+        else:
+            console.print("  [dim]nothing changed[/dim]")
+
+
 scans_app = typer.Typer(
     help="List and prune the scans stored in the index.",
     invoke_without_command=True,
@@ -176,4 +232,5 @@ def register(app: typer.Typer) -> None:
     """Register the system commands on the root application."""
     app.command("drives")(drives_command)
     app.command("scan")(scan_command)
+    app.command("refresh")(refresh_command)
     app.add_typer(scans_app, name="scans")

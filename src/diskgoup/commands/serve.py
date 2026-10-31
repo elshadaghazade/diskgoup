@@ -42,6 +42,7 @@ from typing import Any
 import typer
 
 from diskgoup import __version__
+from diskgoup.core.models import Kind
 
 #: JSON-RPC error codes.
 PARSE_ERROR = -32700
@@ -62,6 +63,7 @@ Handler = Callable[[dict[str, Any], "Server"], Any]
 BACKGROUND_METHODS = frozenset(
     {
         "scan.run",
+        "scan.refresh",
         "explore.types",
         "explore.age",
         "view.layout",
@@ -92,6 +94,7 @@ class Server:
                 "scans.list": self._scans_list,
                 "scans.remove": self._scans_remove,
                 "scan.run": self._scan_run,
+                "scan.refresh": self._scan_refresh,
                 "scan.pause": self._scan_pause,
                 "scan.resume": self._scan_resume,
                 "scan.cancel": self._scan_cancel,
@@ -206,6 +209,35 @@ class Server:
             show_progress=False,
         )
 
+    def _scan_covering(self, index: Any, params: dict[str, Any]) -> Any:
+        """The scan that holds a path.
+
+        The scan the user has open is named by ``scan_id``. Without it the
+        scan that covers the path is looked up — a folder belongs to the scan
+        that walked the tree it is in, not to a scan of its own.
+        """
+        from diskgoup.commands.common import ensure_scan
+
+        raw = params.get("scan_id")
+        if raw is not None:
+            meta = index.scan_meta(int(raw))
+            if meta is None:
+                raise ValueError(f"no scan with id {raw}")
+            return meta
+
+        path = params.get("path")
+        if not path:
+            raise ValueError("path is required")
+        meta = index.scan_for_path(Path(path))
+        if meta is not None:
+            return meta
+        return ensure_scan(index, path, show_progress=False)
+
+    def _scan_is_running(self) -> bool:
+        """True while a scan holds the index's write lock."""
+        with self._scan_lock:
+            return self._scan_control is not None
+
     # ---------------------------------------------------------------- methods
 
     def _app_info(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
@@ -289,6 +321,25 @@ class Server:
                 with self._scan_lock:
                     self._scan_control = None
 
+    def _scan_refresh(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
+        """Walk one folder of a scan again and correct the index.
+
+        Only the folder is walked. The rest of the scan keeps what it holds,
+        and the totals are corrected by the difference — a change in one
+        folder never costs a rescan of the whole tree.
+        """
+        from diskgoup.core.scanner import refresh_subtree
+
+        with self._index() as index:
+            meta = self._scan_covering(index, params)
+            path = Path(params.get("path") or meta.root)
+            result = refresh_subtree(index, meta.scan_id, path)
+            updated = index.scan_meta(meta.scan_id)
+            return {
+                "scan": updated.to_dict() if updated is not None else meta.to_dict(),
+                **result.to_dict(),
+            }
+
     def _running_scan(self) -> Any:
         """The control of the running scan, if there is one."""
         with self._scan_lock:
@@ -328,6 +379,9 @@ class Server:
         the disk. The scan is pinned by ``scan_id``; the path is only the folder
         to open.
         """
+        from diskgoup.core.protect import is_critical, protection_reason
+        from diskgoup.core.scanner import AUTO_REFRESH_LIMIT, is_stale, refresh_subtree
+
         with self._index() as index:
             meta = self._scan_for(index, params)
             root = Path(meta.root)
@@ -337,21 +391,52 @@ class Server:
             if row is None:
                 raise ValueError(f"{target} is not in scan #{meta.scan_id}")
 
-            entries: list[dict[str, Any]] = [
-                {
-                    "name": str(child["name"]),
-                    "path": str(child["path"]),
-                    "is_dir": bool(child["is_dir"]),
-                    "size": int(child["size"]),
-                    "on_disk": int(child["on_disk"]),
-                    "kind": str(child["kind"]),
-                    "protected": bool(child["protected"]),
-                    "mtime": float(child["mtime"]),
-                    "files": int(child["file_count"]),
-                    "folders": int(child["dir_count"]),
-                }
-                for child in index.children(meta.scan_id, int(row["id"]))
-            ]
+            # A folder that changed since the scan is walked again before it
+            # is listed, so the listing is what is on the disk. A folder big
+            # enough to make that slow is left to the user — the answer says
+            # it is stale and the browser offers a refresh.
+            stale = False
+            if not self._scan_is_running() and is_stale(index, meta.scan_id, target):
+                if int(row["file_count"]) <= AUTO_REFRESH_LIMIT:
+                    refresh_subtree(index, meta.scan_id, target)
+                    row = index.entry_by_path(meta.scan_id, target)
+                    # The totals changed with the rows — the answer has to
+                    # carry the new ones, or the app keeps showing the size
+                    # the folder had before the refresh.
+                    refreshed = index.scan_meta(meta.scan_id)
+                    if refreshed is not None:
+                        meta = refreshed
+                else:
+                    stale = True
+
+            # The protection of an entry is decided live, not read from the
+            # index: the column is what the scan recorded, and a scan made
+            # before the rules changed would report every item as protected.
+            # The rule is the one the cleanup gate applies, so a badge in the
+            # list always tells the truth about what the gate will do.
+            folder_kind = _kind_of(str(row["kind"]))
+
+            entries: list[dict[str, Any]] = []
+            for child in index.children(meta.scan_id, int(row["id"])):
+                path = str(child["path"])
+                name = str(child["name"])
+                kind = _kind_of(str(child["kind"]))
+                protected = protection_reason(path, kind, parent_kind=folder_kind) is not None
+                entries.append(
+                    {
+                        "name": name,
+                        "path": path,
+                        "is_dir": bool(child["is_dir"]),
+                        "size": int(child["size"]),
+                        "on_disk": int(child["on_disk"]),
+                        "kind": str(child["kind"]),
+                        "protected": protected,
+                        "critical": is_critical(path),
+                        "mtime": float(child["mtime"]),
+                        "files": int(child["file_count"]),
+                        "folders": int(child["dir_count"]),
+                    }
+                )
             # Folders first, then files — each group by size, the way a file
             # manager shows them.
             entries.sort(key=lambda entry: (not entry["is_dir"], -entry["size"], entry["name"]))
@@ -362,6 +447,7 @@ class Server:
                 "path": path,
                 "parent": _parent_path(root, path),
                 "crumbs": _crumbs(root, path),
+                "stale": stale,
                 "entries": entries,
             }
 
@@ -681,6 +767,14 @@ class Server:
                 permanent=bool(params.get("permanent", False)),
             )
             return {"scan": meta.to_dict(), **result.to_dict()}
+
+
+def _kind_of(name: str) -> Kind | None:
+    """The kind a stored name stands for, or ``None`` when it is unknown."""
+    try:
+        return Kind(name)
+    except ValueError:
+        return None
 
 
 def _parent_path(root: Path, path: str) -> str | None:

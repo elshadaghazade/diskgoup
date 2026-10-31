@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import stat
 import sys
 from pathlib import Path
 
@@ -8,10 +9,15 @@ import pytest
 
 from diskgoup.core.models import Kind
 from diskgoup.core.protect import (
+    PROTECTED_GAME,
+    PROTECTED_SYSTEM,
+    critical_rules,
     entry_is_protected,
     guard_for,
+    is_critical,
     is_protected,
     is_system_path,
+    protection_reason,
 )
 
 
@@ -87,6 +93,42 @@ def _fake_stat() -> os.stat_result:
     return os.stat_result((0o100644, 1, 1, 1, 0, 0, 10, 0.0, 0.0, 0.0))
 
 
+def test_a_folder_the_user_named_like_a_system_one_is_cleanable(tmp_path: Path) -> None:
+    """Only the top of a volume holds system directories.
+
+    A folder called ``vm`` or ``update`` inside a home directory is ordinary
+    content. Refusing those refuses a large part of a normal disk — and a
+    disk cleaner that refuses most of what it finds is not much use.
+    """
+    for name in ("vm", "update", "recovery", "preboot", "system32", "windows"):
+        target = tmp_path / name
+        target.mkdir()
+        assert not is_protected(target), name
+        assert protection_reason(target) is None, name
+
+
+def test_a_system_directory_at_the_top_of_a_volume_is_protected() -> None:
+    for path in ("/vm", "/update", "/recovery"):
+        assert protection_reason(path) == PROTECTED_SYSTEM, path
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="the hidden flag is macOS")
+def test_a_hidden_file_outside_a_system_folder_is_cleanable(tmp_path: Path) -> None:
+    """The hidden flag only means something inside a system folder.
+
+    macOS marks ``.DS_Store`` and a few other files hidden. That says nothing
+    about them being the system's own — they are the files a user most wants
+    to get rid of.
+    """
+    target = tmp_path / ".DS_Store"
+    target.write_bytes(b"x")
+    os.chflags(target, stat.UF_HIDDEN)
+
+    assert target.stat().st_flags & stat.UF_HIDDEN
+    assert not is_protected(target)
+    assert protection_reason(target) is None
+
+
 #: (parent directory, child path, child name) triples covering the cases the
 #: fast path has to get right: a directory that *is* a system root, a child of
 #: one, a system directory name and ordinary content.
@@ -94,6 +136,7 @@ _FAST_PATH_CASES = (
     ("/", "/Library", "Library"),
     ("/", "/Applications", "Applications"),
     ("/", "/System", "System"),
+    ("/", "/vm", "vm"),
     ("/System", "/System/Library", "Library"),
     ("/private", "/private/var", "var"),
     ("/private/var", "/private/var/db", "db"),
@@ -101,7 +144,13 @@ _FAST_PATH_CASES = (
     ("/Users/someone/Downloads", "/Users/someone/Downloads/movie.mp4", "movie.mp4"),
     ("/Users/someone", "/Users/someone/System", "System"),
     ("/Users/someone", "/Users/someone/system32", "system32"),
+    ("/Users/someone", "/Users/someone/vm", "vm"),
+    ("/Users/someone/vm", "/Users/someone/vm/image.iso", "image.iso"),
     ("/Users/someone", "/Users/someone/notes.txt", "notes.txt"),
+    # The macOS data volume — the folder the scan usually starts at.
+    ("/System/Volumes/Data", "/System/Volumes/Data/Users", "Users"),
+    ("/System/Volumes/Data", "/System/Volumes/Data/Applications", "Applications"),
+    ("/System/Volumes/Data", "/System/Volumes/Data/Library", "Library"),
 )
 
 
@@ -123,3 +172,83 @@ def test_the_guard_knows_a_system_root() -> None:
     assert guard_for("/System").under_root
     assert guard_for("/System/Library").under_root
     assert not guard_for("/Users/someone").under_root
+
+
+def test_the_macos_data_volume_is_judged_as_the_place_it_mirrors() -> None:
+    """The writable data volume sits inside /System but holds the user's files.
+
+    A scan of it stores paths like ``/System/Volumes/Data/Users/<me>/…``; if
+    those were judged by the ``/System`` prefix, every item of such a scan
+    would be refused as protected and nothing could ever be cleaned.
+    """
+    assert not is_system_path("/System/Volumes/Data/Users/someone/Downloads")
+    assert not is_protected(Path("/System/Volumes/Data/Users/someone/Downloads/old.zip"))
+    assert not is_protected(Path("/System/Volumes/Data/Users/someone/Downloads"))
+
+    # What it mirrors keeps its own rules.
+    assert is_system_path("/System/Volumes/Data/Applications")
+    assert is_system_path("/System/Volumes/Data/Library")
+    assert is_system_path("/System/Volumes/Data/private/etc")
+    assert is_protected(Path("/System/Volumes/Data/Applications"))
+
+    # The volume itself is the root of the writable disk.
+    assert is_critical("/System/Volumes/Data")
+
+
+def test_the_critical_containers_of_macos() -> None:
+    rules = critical_rules("darwin", "/Users/someone")
+
+    assert is_critical("/", rules)
+    assert is_critical("/Users", rules)
+    assert is_critical("/Users/someone", rules)
+    assert is_critical("/Users/other", rules)
+    assert is_critical("/private", rules)
+    assert is_critical("/Users/someone/Library", rules)
+
+    # What is inside them stays cleanable.
+    assert not is_critical("/Users/someone/Downloads", rules)
+    assert not is_critical("/Users/someone/Downloads/old.zip", rules)
+    assert not is_critical("/Applications", rules)
+
+
+def test_the_critical_containers_of_windows() -> None:
+    rules = critical_rules("win32", r"C:\Users\someone")
+
+    assert is_critical(r"C:\Users", rules)
+    assert is_critical(r"C:\Users\someone", rules)
+    assert is_critical(r"C:\Users\other", rules)
+    assert is_critical(r"C:\Users\someone\AppData", rules)
+    assert is_critical("C:\\", rules)
+    # The root of any other drive.
+    assert is_critical("d:", rules)
+
+    assert not is_critical(r"C:\Users\someone\Downloads", rules)
+    assert not is_critical(r"C:\Program Files\Thing", rules)
+
+
+def test_the_critical_containers_of_linux() -> None:
+    rules = critical_rules("linux", "/home/someone")
+
+    assert is_critical("/", rules)
+    assert is_critical("/home", rules)
+    assert is_critical("/home/someone", rules)
+    assert is_critical("/home/other", rules)
+    assert is_critical("/root", rules)
+    assert is_critical("/home/someone/.config", rules)
+    assert is_critical("/home/someone/.local", rules)
+
+    assert not is_critical("/home/someone/Downloads", rules)
+    assert not is_critical("/home/someone/Downloads/old.zip", rules)
+    assert not is_critical("/var/tmp", rules)
+
+
+def test_the_reason_says_why_an_item_is_refused(tmp_path: Path) -> None:
+    target = tmp_path / "notes.txt"
+    target.write_text("hello")
+
+    assert protection_reason(target) is None
+    assert protection_reason(target, Kind.DOCUMENT) is None
+    assert protection_reason(target, Kind.GAME) == PROTECTED_GAME
+    assert protection_reason(Path("/System/Library")) == PROTECTED_SYSTEM
+    # A file inside a game folder is game data as well.
+    assert protection_reason(target, parent_kind=Kind.GAME) == PROTECTED_GAME
