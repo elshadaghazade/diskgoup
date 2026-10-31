@@ -18,7 +18,11 @@ Cancelling leaves every file exactly where it was.
 
 from __future__ import annotations
 
+import os
+import shutil
+import stat
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -205,8 +209,9 @@ def validate(index: ScanIndex, scan_id: int) -> tuple[list[StagedItem], list[Val
     """Check that every staged item is still safe to remove.
 
     An item is refused when it has disappeared, when it is no longer eligible
-    (it became protected), or when its size changed since the scan — that last
-    case means the file was modified while the scan was running.
+    (it became protected), or when a *file* changed since the scan — that last
+    case means the file was modified while the scan was running. A folder that
+    changed is still fine: the whole subtree goes away anyway.
     """
     items = staged_items(index, scan_id)
     valid: list[StagedItem] = []
@@ -221,7 +226,11 @@ def validate(index: ScanIndex, scan_id: int) -> tuple[list[StagedItem], list[Val
             issues.append(ValidationIssue(item.path, reason))
             continue
         row = index.entry_by_path(scan_id, item.path)
-        if row is not None and int(row["size"]) != item.size:
+        if row is not None and int(row["size"]) != item.size and not bool(row["is_dir"]):
+            # A file that changed since the scan means the decision was made
+            # on stale data. A folder that changed is not a problem: the whole
+            # subtree goes away anyway, and a cache folder is written to all
+            # the time.
             issues.append(
                 ValidationIssue(item.path, "File changed since the scan; re-scan to refresh.")
             )
@@ -235,13 +244,15 @@ def commit(
     index: ScanIndex,
     scan_id: int,
     *,
-    to_trash: bool = True,
     permanent: bool = False,
 ) -> CleanupResult:
-    """Move the validated items to the recycle bin.
+    """Move the validated items to the recycle bin — or delete them for good.
 
     The list is revalidated immediately before anything is moved, so an item
     that changed since validation is left alone.
+
+    ``permanent`` deletes for good. That is the only way to *free* the space:
+    the recycle bin still holds the bytes until it is emptied.
     """
     result = CleanupResult()
     valid, issues = validate(index, scan_id)
@@ -250,7 +261,7 @@ def commit(
     for item in valid:
         try:
             if permanent:
-                item.path.unlink()
+                _remove(item.path)
             else:
                 _to_trash(item.path)
         except OSError as exc:
@@ -305,4 +316,43 @@ def _to_trash(path: Path) -> None:
         from send2trash import send2trash
     except ImportError as exc:  # pragma: no cover - dependency is declared
         raise CleanupError("send2trash is unavailable — refusing to delete permanently.") from exc
-    send2trash(str(path))
+    try:
+        send2trash(str(path))
+    except OSError:
+        # macOS reports a failure for some files — a ``.DS_Store`` the Trash
+        # already holds, for one — even though the move went through. What
+        # matters is whether the file is off the disk, so that is what is
+        # checked before the failure is passed on.
+        if path.exists():
+            raise
+
+
+def _remove(path: Path) -> None:
+    """Remove a path for good.
+
+    A file goes with ``unlink()``; a folder needs the whole tree, because
+    ``unlink()`` cannot remove a directory — it fails with "Operation not
+    permitted" on macOS.
+    """
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path, onexc=_retry_read_only)
+        return
+    try:
+        path.unlink()
+    except PermissionError:
+        # A read-only file — Windows refuses to delete it. Clearing the mark
+        # is what a file manager does.
+        os.chmod(path, stat.S_IWRITE)
+        path.unlink()
+
+
+def _retry_read_only(func: Callable[..., object], path: str, exc: BaseException) -> None:
+    """Remove an entry that is marked read-only.
+
+    A folder of read-only files fails as a whole on Windows. The mark is
+    what stopped the removal, so it is cleared and the removal is retried.
+    """
+    if not isinstance(exc, PermissionError):
+        raise exc
+    os.chmod(path, stat.S_IWRITE)
+    func(path)

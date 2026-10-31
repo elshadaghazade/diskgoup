@@ -169,6 +169,110 @@ def test_commit_reports_a_failure_without_raising(
     assert result.issues
 
 
+def test_commit_removes_a_folder_and_its_content(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """A folder can be deleted for good — it needs more than unlink()."""
+    root = tmp_path_factory.mktemp("folder")
+    folder = root / "normal_folder"
+    (folder / "inner").mkdir(parents=True)
+    (folder / "inner" / "file.bin").write_bytes(b"z" * 128)
+
+    index = ScanIndex(tmp_path_factory.mktemp("idx") / "index.db")
+    scanner = Scanner(index, ScanOptions(root=root))
+    scan_id = scanner.run().meta.scan_id
+
+    added, refused = stage(index, scan_id, [folder])
+    assert added and not refused
+
+    result = commit(index, scan_id, permanent=True)
+
+    assert result.moved == [folder]
+    assert not folder.exists()
+    assert result.failed == []
+
+
+def test_a_folder_that_changed_since_the_scan_is_still_cleanable(
+    tmp_path_factory: pytest.TempPathFactory,
+) -> None:
+    """A cache folder is written to all the time — that must not block it.
+
+    The size of a file that changed means the decision was made on stale
+    data. The size of a *folder* that changed means nothing: the whole
+    subtree goes away anyway.
+    """
+    root = tmp_path_factory.mktemp("changed")
+    folder = root / "Cache"
+    folder.mkdir()
+    (folder / "blob.bin").write_bytes(b"z" * 128)
+
+    index = ScanIndex(tmp_path_factory.mktemp("idx") / "index.db")
+    scan_id = Scanner(index, ScanOptions(root=root)).run().meta.scan_id
+
+    added, refused = stage(index, scan_id, [folder])
+    assert added and not refused
+
+    # Something is written into the folder after the scan.
+    (folder / "more.bin").write_bytes(b"z" * 64)
+
+    valid, issues = validate(index, scan_id)
+
+    assert valid and not issues
+
+    result = commit(index, scan_id, permanent=True)
+
+    assert result.moved == [folder]
+    assert not folder.exists()
+
+
+def test_a_trash_that_moved_the_file_is_not_a_failure(
+    scanned: tuple[ScanIndex, int, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """macOS reports a failure for some files — but the move went through.
+
+    The Trash API refuses a ``.DS_Store`` the trash already holds and says
+    "file not found" while the file is being moved. What matters is that the
+    file is off the disk.
+    """
+    import send2trash
+
+    index, scan_id, root = scanned
+    target = root / "junk.bin"
+    stage(index, scan_id, [target])
+
+    def fake_send2trash(path: str) -> None:
+        Path(path).rename(f"{path}.trashed")
+        raise OSError("File not found")
+
+    monkeypatch.setattr(send2trash, "send2trash", fake_send2trash)
+
+    result = commit(index, scan_id, permanent=False)
+
+    assert result.moved == [target]
+    assert result.failed == []
+
+
+def test_a_trash_that_leaves_the_file_alone_is_a_failure(
+    scanned: tuple[ScanIndex, int, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A file that is still there after the trash failed was not removed."""
+    import send2trash
+
+    index, scan_id, root = scanned
+    target = root / "junk.bin"
+    stage(index, scan_id, [target])
+
+    def fake_send2trash(path: str) -> None:
+        raise OSError("Permission denied")
+
+    monkeypatch.setattr(send2trash, "send2trash", fake_send2trash)
+
+    result = commit(index, scan_id, permanent=False)
+
+    assert result.moved == []
+    assert result.failed == [(target, "Permission denied")]
+
+
 def test_the_rpc_stages_and_takes_items_back(
     tmp_path: Path, scanned: tuple[ScanIndex, int, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:

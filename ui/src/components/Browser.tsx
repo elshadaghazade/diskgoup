@@ -42,6 +42,8 @@ export default function Browser({ scanRef, scan, filter, onSelect, onScan }: Pro
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(false)
   const [reviewing, setReviewing] = useState(false)
+  /** The safe-to-clean scope is open — the listing is the junk, not a folder. */
+  const [scope, setScope] = useState(false)
   /** The newest request — an older answer must not overwrite a newer one. */
   const request = useRef(0)
 
@@ -64,11 +66,47 @@ export default function Browser({ scanRef, scan, filter, onSelect, onScan }: Pro
         .browse(scanRef, target)
         .then((result) => {
           if (id !== request.current) return
+          setScope(false)
           show(result)
           // The listing carries the totals the index holds now — a refresh
           // or a cleanup may have corrected them.
           onScan(result.scan)
           if (note) setNote(note)
+          setLoading(false)
+        })
+        .catch((err: Error) => {
+          if (id !== request.current) return
+          setError(err.message)
+          setLoading(false)
+        })
+    },
+    [scanRef, show, onScan],
+  )
+
+  /**
+   * Open the safe-to-clean scope.
+   *
+   * The scope is the junk of the scan — the cache folders the operating
+   * system regenerates. It is a listing like any other, so the ordinary
+   * selection and the ordinary review do the rest.
+   */
+  const loadScope = useCallback(
+    (note?: string) => {
+      if (!scanRef) return
+      const id = ++request.current
+      setLoading(true)
+      setError('')
+      api
+        .reclaimable(scanRef)
+        .then((result) => {
+          if (id !== request.current) return
+          setScope(true)
+          show(result)
+          onScan(result.scan)
+          setNote(
+            note ??
+              'The cache folders of this scan — the space the system regenerates. Pick what to clean.',
+          )
           setLoading(false)
         })
         .catch((err: Error) => {
@@ -210,13 +248,19 @@ export default function Browser({ scanRef, scan, filter, onSelect, onScan }: Pro
     }
   }
 
-  /** The items were moved to the recycle bin — the index dropped their rows. */
-  const onCommitted = (moved: string[]) => {
+  /** The items were removed — the index dropped their rows. */
+  const onCommitted = (moved: string[], permanent: boolean) => {
     setGone((current) => [...current, ...moved])
     setSelected((current) => current.filter((path) => !moved.includes(path)))
     setReviewing(false)
-    const note = `${count(moved.length)} item${moved.length > 1 ? 's' : ''} moved to the recycle bin.`
-    if (folder) {
+    // Say what actually happened: the recycle bin still holds the bytes.
+    const note = permanent
+      ? `${count(moved.length)} item${moved.length > 1 ? 's' : ''} deleted for good — the space is free.`
+      : `${count(moved.length)} item${moved.length > 1 ? 's' : ''} moved to the recycle bin — the space comes back when the Trash is emptied.`
+    if (scope) {
+      // The scope is the junk of the scan — read it again, it has changed.
+      loadScope(note)
+    } else if (folder) {
       // The index no longer lists what was removed — read the folder again.
       load(folder.path, note)
     } else {
@@ -259,22 +303,53 @@ export default function Browser({ scanRef, scan, filter, onSelect, onScan }: Pro
               Loading…
             </span>
           )}
-          <button
-            className="button small"
-            onClick={() => folder?.parent && load(folder.parent)}
-            disabled={loading || !folder?.parent}
-            title="Open the parent folder"
-          >
-            ↑ Up
-          </button>
-          <button
-            className="button small"
-            onClick={() => void onRefresh()}
-            disabled={loading || busy || !folder}
-            title="Walk this folder again and update the index"
-          >
-            ↻ Refresh
-          </button>
+          {scope ? (
+            <>
+              <button
+                className="button small"
+                onClick={() => load(scanRef.path)}
+                disabled={loading || busy}
+                title="Back to the scan"
+              >
+                ← Back
+              </button>
+              <button
+                className="button small"
+                onClick={() => setSelected(shown.map((entry) => entry.path))}
+                disabled={loading || shown.length === 0}
+                title="Take everything on the list"
+              >
+                Select all
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                className="button small"
+                onClick={() => folder?.parent && load(folder.parent)}
+                disabled={loading || !folder?.parent}
+                title="Open the parent folder"
+              >
+                ↑ Up
+              </button>
+              <button
+                className="button small"
+                onClick={() => void onRefresh()}
+                disabled={loading || busy || !folder}
+                title="Walk this folder again and update the index"
+              >
+                ↻ Refresh
+              </button>
+              <button
+                className="button small"
+                onClick={() => loadScope()}
+                disabled={loading || busy}
+                title="The cache folders of this scan — the space the system regenerates"
+              >
+                ✨ Safe to clean
+              </button>
+            </>
+          )}
           <button
             className="button small danger"
             onClick={() => void onClean()}
@@ -311,7 +386,7 @@ export default function Browser({ scanRef, scan, filter, onSelect, onScan }: Pro
                 role="option"
                 aria-selected={isSelected}
                 tabIndex={0}
-                title={entry.path}
+                title={entry.reason ? `${entry.path} — ${entry.reason}` : entry.path}
                 onClick={(event) => onCardClick(entry, event)}
                 onDoubleClick={() => entry.is_dir && load(entry.path)}
                 onKeyDown={(event) => {

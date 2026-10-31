@@ -125,6 +125,16 @@ export const api = {
     }),
 
   /**
+   * The space that can be reclaimed safely.
+   *
+   * The cache folders of the scan — the ones the operating system
+   * regenerates. The answer has the shape of a folder listing, so the
+   * browser draws it with the same cards.
+   */
+  reclaimable: (ref: ScanRef) =>
+    call<import('./types').BrowserFolder>('explore.reclaimable', refParams(ref)),
+
+  /**
    * Walk one folder of the scan again and correct the index.
    *
    * Only the folder is walked — the rest of the scan keeps what it holds.
