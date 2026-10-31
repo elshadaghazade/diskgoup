@@ -100,6 +100,7 @@ class Server:
                 "scan.cancel": self._scan_cancel,
                 "explore.tree": self._explore_tree,
                 "explore.children": self._explore_children,
+                "explore.reclaimable": self._explore_reclaimable,
                 "explore.sizes": self._explore_sizes,
                 "explore.types": self._explore_types,
                 "explore.age": self._explore_age,
@@ -379,7 +380,7 @@ class Server:
         the disk. The scan is pinned by ``scan_id``; the path is only the folder
         to open.
         """
-        from diskgoup.core.protect import is_critical, protection_reason
+        from diskgoup.core.protect import PROTECTED_CRITICAL, is_critical, protection_reason
         from diskgoup.core.scanner import AUTO_REFRESH_LIMIT, is_stale, refresh_subtree
 
         with self._index() as index:
@@ -421,7 +422,14 @@ class Server:
                 path = str(child["path"])
                 name = str(child["name"])
                 kind = _kind_of(str(child["kind"]))
-                protected = protection_reason(path, kind, parent_kind=folder_kind) is not None
+                # The reason is what the cleanup gate would say, so a badge
+                # in the list tells the user why the item is off limits.
+                critical = is_critical(path)
+                reason = (
+                    PROTECTED_CRITICAL
+                    if critical
+                    else protection_reason(path, kind, parent_kind=folder_kind)
+                )
                 entries.append(
                     {
                         "name": name,
@@ -430,8 +438,9 @@ class Server:
                         "size": int(child["size"]),
                         "on_disk": int(child["on_disk"]),
                         "kind": str(child["kind"]),
-                        "protected": protected,
-                        "critical": is_critical(path),
+                        "protected": reason is not None,
+                        "critical": critical,
+                        "reason": reason,
                         "mtime": float(child["mtime"]),
                         "files": int(child["file_count"]),
                         "folders": int(child["dir_count"]),
@@ -448,6 +457,49 @@ class Server:
                 "parent": _parent_path(root, path),
                 "crumbs": _crumbs(root, path),
                 "stale": stale,
+                "entries": entries,
+            }
+
+    def _explore_reclaimable(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
+        """List the space that can be reclaimed safely.
+
+        The answer has the shape of a folder listing, so the browser draws it
+        with the same cards: the user picks what to clean and the ordinary
+        review flow does the rest. Every candidate has been through the
+        cleanup gate — the ones the system protects come back with the reason
+        they are off limits.
+        """
+        from diskgoup.core.reclaim import reclaimable
+
+        with self._index() as index:
+            meta = self._scan_for(index, params)
+            root = Path(meta.root)
+
+            entries: list[dict[str, Any]] = []
+            for candidate in reclaimable(index, meta.scan_id):
+                entries.append(
+                    {
+                        "name": candidate.name,
+                        "path": str(candidate.path),
+                        "is_dir": True,
+                        "size": candidate.size,
+                        "on_disk": candidate.on_disk,
+                        "kind": str(candidate.kind),
+                        "protected": candidate.protected,
+                        "critical": candidate.critical,
+                        "mtime": candidate.mtime,
+                        "files": candidate.files,
+                        "folders": candidate.folders,
+                        "reason": candidate.reason,
+                    }
+                )
+
+            return {
+                "scan": meta.to_dict(),
+                "path": str(root),
+                "parent": None,
+                "crumbs": [{"name": "Safe to clean", "path": str(root)}],
+                "stale": False,
                 "entries": entries,
             }
 
@@ -763,7 +815,6 @@ class Server:
             result = commit(
                 index,
                 meta.scan_id,
-                to_trash=not bool(params.get("permanent", False)),
                 permanent=bool(params.get("permanent", False)),
             )
             return {"scan": meta.to_dict(), **result.to_dict()}

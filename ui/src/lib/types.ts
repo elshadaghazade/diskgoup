@@ -77,6 +77,8 @@ export type BrowserEntry = {
   mtime: number
   files: number
   folders: number
+  /** Why the item may not be cleaned — set when the gate refuses it. */
+  reason?: string | null
 }
 
 /** One step of the path breadcrumb. */

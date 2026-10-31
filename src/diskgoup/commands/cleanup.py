@@ -168,10 +168,16 @@ def commit_command(
             emit({"scan": meta.to_dict(), **result.to_dict()})
             return
 
-        console.print(
-            f"[green]✔[/green] moved {human_count(len(result.moved))} item(s) to "
-            f"{'disk' if permanent else 'the recycle bin'} · {human_bytes(result.freed)} freed"
-        )
+        if permanent:
+            console.print(
+                f"[green]✔[/green] deleted {human_count(len(result.moved))} item(s) for good · "
+                f"{human_bytes(result.freed)} freed"
+            )
+        else:
+            console.print(
+                f"[green]✔[/green] moved {human_count(len(result.moved))} item(s) to the "
+                "recycle bin — the space comes back when the trash is emptied"
+            )
         for path, reason in result.failed:
             console.print(f"[red]failed[/red] {path}: {reason}")
         for issue in result.issues:
