@@ -13,6 +13,7 @@ from typing import Any
 import pytest
 
 from diskgoup.commands.serve import INTERNAL_ERROR, Server
+from diskgoup.core.cleanup import stage
 from diskgoup.core.scanner import Scanner, ScanOptions
 from diskgoup.core.store import _CHILDREN_SQL, ScanIndex
 
@@ -142,6 +143,84 @@ def test_the_children_are_ordered_by_name(scanned: tuple[int, str, Path]) -> Non
         names = [str(child["name"]) for child in index.children(scan_id, int(row["id"]))]
 
     assert names == sorted(names)
+
+
+def test_the_listing_says_what_cannot_be_cleaned(scanned: tuple[int, str, Path]) -> None:
+    """Every entry carries the live protection verdict and the critical flag."""
+    scan_id, root, _ = scanned
+
+    result = browse(scan_id, root)
+
+    for entry in result["entries"]:
+        assert entry["protected"] is False
+        assert entry["critical"] is False
+
+
+def test_a_file_inside_a_system_folder_is_protected(scanned: tuple[int, str, Path]) -> None:
+    """The verdict is live: a path under a system root is protected."""
+    scan_id, root, db = scanned
+
+    with ScanIndex(db) as index:
+        row = index.entry_by_path(scan_id, Path(root))
+        assert row is not None
+        children = index.children(scan_id, int(row["id"]))
+        movie = next(child for child in children if child["name"] == "movie.mp4")
+        index.connection.execute(
+            "UPDATE entries SET path = ? WHERE id = ?",
+            ("/System/Library/Thing/movie.mp4", int(movie["id"])),
+        )
+        index.commit()
+
+    result = browse(scan_id, root)
+    listed = next(entry for entry in result["entries"] if entry["name"] == "movie.mp4")
+
+    assert listed["protected"] is True
+
+
+def test_the_listing_agrees_with_the_cleanup_gate(scanned: tuple[int, str, Path]) -> None:
+    """A badge in the list must tell the truth about what the gate will do."""
+    scan_id, root, db = scanned
+
+    with ScanIndex(db) as index:
+        row = index.entry_by_path(scan_id, Path(root))
+        assert row is not None
+        children = index.children(scan_id, int(row["id"]))
+        movie = next(child for child in children if child["name"] == "movie.mp4")
+        index.connection.execute(
+            "UPDATE entries SET path = ? WHERE id = ?",
+            ("/System/Library/Thing/movie.mp4", int(movie["id"])),
+        )
+        index.commit()
+
+    result = browse(scan_id, root)
+    listed = next(entry for entry in result["entries"] if entry["name"] == "movie.mp4")
+
+    with ScanIndex(db) as index:
+        _, refused = stage(index, scan_id, [Path("/System/Library/Thing/movie.mp4")])
+
+    assert len(refused) == 1
+    assert listed["protected"] is True
+
+
+def test_a_critical_container_is_marked(scanned: tuple[int, str, Path]) -> None:
+    """The users container is refused as an item — its contents are not."""
+    scan_id, root, db = scanned
+    home = str(Path.home())
+
+    with ScanIndex(db) as index:
+        row = index.entry_by_path(scan_id, Path(root))
+        assert row is not None
+        children = index.children(scan_id, int(row["id"]))
+        index.connection.execute(
+            "UPDATE entries SET path = ? WHERE id = ?", (home, int(children[0]["id"]))
+        )
+        index.commit()
+
+    result = browse(scan_id, root)
+    marked = [entry for entry in result["entries"] if entry["path"] == home]
+
+    assert len(marked) == 1
+    assert marked[0]["critical"] is True
 
 
 def test_the_children_query_does_not_walk_the_whole_scan(scanned: tuple[int, str, Path]) -> None:

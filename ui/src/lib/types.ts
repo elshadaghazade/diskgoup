@@ -72,6 +72,8 @@ export type BrowserEntry = {
   on_disk: number
   kind: string
   protected: boolean
+  /** The item is a container the system needs — it cannot be cleaned. */
+  critical: boolean
   mtime: number
   files: number
   folders: number

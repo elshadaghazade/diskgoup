@@ -42,6 +42,7 @@ from typing import Any
 import typer
 
 from diskgoup import __version__
+from diskgoup.core.models import Kind
 
 #: JSON-RPC error codes.
 PARSE_ERROR = -32700
@@ -378,6 +379,7 @@ class Server:
         the disk. The scan is pinned by ``scan_id``; the path is only the folder
         to open.
         """
+        from diskgoup.core.protect import is_critical, protection_reason
         from diskgoup.core.scanner import AUTO_REFRESH_LIMIT, is_stale, refresh_subtree
 
         with self._index() as index:
@@ -407,21 +409,34 @@ class Server:
                 else:
                     stale = True
 
-            entries: list[dict[str, Any]] = [
-                {
-                    "name": str(child["name"]),
-                    "path": str(child["path"]),
-                    "is_dir": bool(child["is_dir"]),
-                    "size": int(child["size"]),
-                    "on_disk": int(child["on_disk"]),
-                    "kind": str(child["kind"]),
-                    "protected": bool(child["protected"]),
-                    "mtime": float(child["mtime"]),
-                    "files": int(child["file_count"]),
-                    "folders": int(child["dir_count"]),
-                }
-                for child in index.children(meta.scan_id, int(row["id"]))
-            ]
+            # The protection of an entry is decided live, not read from the
+            # index: the column is what the scan recorded, and a scan made
+            # before the rules changed would report every item as protected.
+            # The rule is the one the cleanup gate applies, so a badge in the
+            # list always tells the truth about what the gate will do.
+            folder_kind = _kind_of(str(row["kind"]))
+
+            entries: list[dict[str, Any]] = []
+            for child in index.children(meta.scan_id, int(row["id"])):
+                path = str(child["path"])
+                name = str(child["name"])
+                kind = _kind_of(str(child["kind"]))
+                protected = protection_reason(path, kind, parent_kind=folder_kind) is not None
+                entries.append(
+                    {
+                        "name": name,
+                        "path": path,
+                        "is_dir": bool(child["is_dir"]),
+                        "size": int(child["size"]),
+                        "on_disk": int(child["on_disk"]),
+                        "kind": str(child["kind"]),
+                        "protected": protected,
+                        "critical": is_critical(path),
+                        "mtime": float(child["mtime"]),
+                        "files": int(child["file_count"]),
+                        "folders": int(child["dir_count"]),
+                    }
+                )
             # Folders first, then files — each group by size, the way a file
             # manager shows them.
             entries.sort(key=lambda entry: (not entry["is_dir"], -entry["size"], entry["name"]))
@@ -752,6 +767,14 @@ class Server:
                 permanent=bool(params.get("permanent", False)),
             )
             return {"scan": meta.to_dict(), **result.to_dict()}
+
+
+def _kind_of(name: str) -> Kind | None:
+    """The kind a stored name stands for, or ``None`` when it is unknown."""
+    try:
+        return Kind(name)
+    except ValueError:
+        return None
 
 
 def _parent_path(root: Path, path: str) -> str | None:

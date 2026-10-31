@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
-import { bytes, count, kindColor, percent } from '../lib/format'
+import { bytes, count, kindColor, percent, baseName } from '../lib/format'
 import type { BrowserEntry, BrowserFolder, ScanMeta, ScanRef } from '../lib/types'
 import CleanupDialog from './CleanupDialog'
 
@@ -148,7 +148,15 @@ export default function Browser({ scanRef, scan, filter, onSelect, onScan }: Pro
     setAnchor(entry.path)
   }
 
-  /** Stage the selection for cleanup and open the review. */
+  /**
+   * Stage the selection for cleanup and open the review.
+   *
+   * The review only opens when the selection holds something the system
+   * allows — an item it protects is refused with the reason why, and the list
+   * stays where it is instead of opening an empty review. An item that is
+   * already in the review counts as allowed: it is there, and the review is
+   * where the user can see it.
+   */
   const onClean = async () => {
     if (!scanRef || selected.length === 0) return
     setBusy(true)
@@ -158,11 +166,20 @@ export default function Browser({ scanRef, scan, filter, onSelect, onScan }: Pro
       const result = await api.stageCleanup(scanRef, selected)
       if (result.refused.length > 0) {
         setError(
-          `${result.refused.length} item${result.refused.length > 1 ? 's' : ''} cannot be cleaned. ` +
-            result.refused.map((item) => item.reason).join(' '),
+          `${count(result.refused.length)} item${result.refused.length > 1 ? 's' : ''} cannot be cleaned. ` +
+            result.refused.map((item) => `${baseName(item.path)}: ${item.reason}`).join(' '),
         )
       }
-      setReviewing(true)
+      const refused = new Set(result.refused.map((item) => item.path))
+      const allowed = selected.filter((path) => !refused.has(path))
+      if (allowed.length > 0) {
+        setNote(
+          result.staged.length > 0
+            ? 'Added to review. Nothing has been removed.'
+            : 'Already in the review. Nothing has been removed.',
+        )
+        setReviewing(true)
+      }
     } catch (err) {
       setError((err as Error).message)
     } finally {
@@ -308,6 +325,26 @@ export default function Browser({ scanRef, scan, filter, onSelect, onScan }: Pro
                   {entry.is_dir ? '▤' : '▪'}
                 </span>
                 <span className="name">{entry.name}</span>
+                {(entry.protected || entry.critical) && (
+                  <span className="flags">
+                    {entry.critical && (
+                      <span
+                        className="badge critical"
+                        title="This folder is required by the system or your account — it cannot be cleaned."
+                      >
+                        system
+                      </span>
+                    )}
+                    {entry.protected && !entry.critical && (
+                      <span
+                        className="badge protected"
+                        title="Protected — this item cannot be cleaned."
+                      >
+                        protected
+                      </span>
+                    )}
+                  </span>
+                )}
                 <span className="meta">
                   {entry.is_dir && <span className="items">{count(entry.files)} files</span>}
                   <span className="size">{bytes(entry.size)}</span>
