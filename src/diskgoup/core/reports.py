@@ -104,8 +104,9 @@ def type_report_csv(index: ScanIndex, scan_id: int) -> str:
     if meta is None:
         raise ValueError(f"no scan with id {scan_id}")
 
-    totals = index.kind_totals(scan_id)
-    counts = index.kind_counts(scan_id)
+    breakdown = index.kind_breakdown(scan_id)
+    totals = {kind: size for kind, (size, _) in breakdown.items()}
+    counts = {kind: count for kind, (_, count) in breakdown.items()}
     total = sum(totals.values()) or 1
 
     buffer = io.StringIO()

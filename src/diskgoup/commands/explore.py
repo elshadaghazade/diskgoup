@@ -140,13 +140,12 @@ def types_command(
     """Show the file-type breakdown of a scan."""
     with open_index() as index:
         meta = ensure_scan(index, path, scan_id=scan_id, rescan=rescan)
-        totals = index.kind_totals(meta.scan_id)
-        counts = index.kind_counts(meta.scan_id)
+        totals = index.kind_breakdown(meta.scan_id)
 
         ordered = [
-            (kind, totals.get(str(kind), 0), counts.get(str(kind), 0))
+            (kind, *totals.get(str(kind), (0, 0)))
             for kind in KIND_ORDER
-            if totals.get(str(kind), 0) or counts.get(str(kind), 0)
+            if totals.get(str(kind), (0, 0))[0] or totals.get(str(kind), (0, 0))[1]
         ]
         total = sum(size for _, size, _ in ordered)
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../lib/api'
 import { bytes, count, kindColor, percent } from '../lib/format'
 import type { BrowserEntry, BrowserFolder, ScanMeta, ScanRef } from '../lib/types'
@@ -11,6 +11,9 @@ type Props = {
   /** The entry the user last touched — the inspector shows it. */
   onSelect: (entry: BrowserEntry | null) => void
 }
+
+/** How many cards are drawn for one folder. */
+const LIMIT = 1000
 
 /**
  * The folder browser.
@@ -30,52 +33,53 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
   const [error, setError] = useState('')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [reviewing, setReviewing] = useState(false)
+  /** The newest request — an older answer must not overwrite a newer one. */
+  const request = useRef(0)
 
-  const show = useCallback(
-    (result: BrowserFolder) => {
-      setFolder(result)
-      setSelected([])
-      setFocused(null)
-      setAnchor(null)
-      setGone([])
-      setNote('')
+  const show = useCallback((result: BrowserFolder) => {
+    setFolder(result)
+    setSelected([])
+    setFocused(null)
+    setAnchor(null)
+    setNote('')
+  }, [])
+
+  /** Open a folder in place. */
+  const load = useCallback(
+    (target: string) => {
+      if (!scanRef) return
+      const id = ++request.current
+      setLoading(true)
+      setError('')
+      api
+        .browse(scanRef, target)
+        .then((result) => {
+          if (id !== request.current) return
+          show(result)
+          setLoading(false)
+        })
+        .catch((err: Error) => {
+          if (id !== request.current) return
+          setError(err.message)
+          setLoading(false)
+        })
     },
-    [],
+    [scanRef, show],
   )
 
   // Open the scan root whenever the scan changes.
   useEffect(() => {
     if (!scanRef) return
-    let cancelled = false
-    api
-      .browse(scanRef, scanRef.path)
-      .then((result) => {
-        if (!cancelled) show(result)
-      })
-      .catch((err: Error) => !cancelled && setError(err.message))
-    return () => {
-      cancelled = true
-    }
-  }, [scanRef, show])
+    setGone([])
+    load(scanRef.path)
+  }, [scanRef, load])
 
   // The inspector shows the entry the user last touched.
   useEffect(() => {
     onSelect(focused)
   }, [focused, onSelect])
-
-  /** Open a folder in place. */
-  const open = useCallback(
-    (target: string) => {
-      if (!scanRef) return
-      setError('')
-      api
-        .browse(scanRef, target)
-        .then(show)
-        .catch((err: Error) => setError(err.message))
-    },
-    [scanRef, show],
-  )
 
   const visible = useMemo(() => {
     const needle = filter.trim().toLowerCase()
@@ -86,6 +90,16 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
         (!needle || entry.name.toLowerCase().includes(needle)),
     )
   }, [folder, filter, gone])
+
+  /**
+   * What is drawn.
+   *
+   * A folder can hold tens of thousands of entries — a browser cache easily
+   * does — and a card for every one of them would take the window down with
+   * it. The first `LIMIT` of them are shown and the rest are counted, so the
+   * user knows there are more. The filter still reaches all of them.
+   */
+  const shown = useMemo(() => visible.slice(0, LIMIT), [visible])
 
   /**
    * Click a card.
@@ -108,7 +122,7 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
       return
     }
     if (event.shiftKey && anchor) {
-      const paths = visible.map((item) => item.path)
+      const paths = shown.map((item) => item.path)
       const from = paths.indexOf(anchor)
       const to = paths.indexOf(entry.path)
       if (from >= 0 && to >= 0) {
@@ -174,7 +188,7 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
               )}
               <button
                 className={isLast(crumb.path) ? 'current' : ''}
-                onClick={() => open(crumb.path)}
+                onClick={() => load(crumb.path)}
                 title={crumb.path}
                 aria-current={isLast(crumb.path) ? 'page' : undefined}
               >
@@ -185,10 +199,16 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
         </nav>
 
         <div className="view-actions">
+          {loading && (
+            <span className="browser-loading" role="status">
+              <span className="spinner" aria-hidden="true" />
+              Loading…
+            </span>
+          )}
           <button
             className="button small"
-            onClick={() => folder?.parent && open(folder.parent)}
-            disabled={!folder?.parent}
+            onClick={() => folder?.parent && load(folder.parent)}
+            disabled={loading || !folder?.parent}
             title="Open the parent folder"
           >
             ↑ Up
@@ -196,7 +216,7 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
           <button
             className="button small danger"
             onClick={() => void onClean()}
-            disabled={selected.length === 0 || busy}
+            disabled={loading || selected.length === 0 || busy}
             title="Clean the selected items"
           >
             Clean
@@ -209,12 +229,12 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
 
       <div className="workspace-content">
         <div
-          className="folder-grid"
+          className={`folder-grid${loading ? ' loading' : ''}`}
           role="listbox"
           aria-multiselectable="true"
           aria-label="Folder contents"
         >
-          {visible.map((entry) => {
+          {shown.map((entry) => {
             const isSelected = selected.includes(entry.path)
             const hasChildren = entry.files + entry.folders > 0
             return (
@@ -226,7 +246,7 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
                 tabIndex={0}
                 title={entry.path}
                 onClick={(event) => onCardClick(entry, event)}
-                onDoubleClick={() => entry.is_dir && open(entry.path)}
+                onDoubleClick={() => entry.is_dir && load(entry.path)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault()
@@ -250,7 +270,7 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
                     title="Open this folder"
                     onClick={(event) => {
                       event.stopPropagation()
-                      open(entry.path)
+                      load(entry.path)
                     }}
                   >
                     ›
@@ -261,9 +281,22 @@ export default function Browser({ scanRef, scan, filter, onSelect }: Props) {
           })}
         </div>
 
+        {visible.length > shown.length && (
+          <div className="browser-note">
+            Showing the first {count(shown.length)} of {count(visible.length)} entries. Narrow
+            the list with the filter above to reach the rest.
+          </div>
+        )}
+
         {visible.length === 0 && (
           <div className="empty-state">
-            <div>{filter ? 'No entries match this filter.' : 'This folder is empty.'}</div>
+            <div>
+              {loading
+                ? 'Loading the folder…'
+                : filter
+                  ? 'No entries match this filter.'
+                  : 'This folder is empty.'}
+            </div>
           </div>
         )}
       </div>
