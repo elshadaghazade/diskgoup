@@ -10,7 +10,10 @@ Nothing is ever deleted straight away. The flow mirrors DiskBOX exactly:
 6. **Recycle bin** — the items are moved to the platform's trash.
 
 Protected paths (system directories, protected application data, game files and
-saves) can never be staged. Cancelling leaves every file exactly where it was.
+saves) can never be staged, and neither can the containers that would break the
+machine — the volume root, the users container, a user's home directory — as
+long as only the container itself is refused and not what is inside it.
+Cancelling leaves every file exactly where it was.
 """
 
 from __future__ import annotations
@@ -19,7 +22,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from diskgoup.core.protect import is_protected
+from diskgoup.core.models import Kind
+from diskgoup.core.protect import PROTECTED_CRITICAL, is_critical, protection_reason
 from diskgoup.core.store import ScanIndex
 
 
@@ -73,6 +77,45 @@ class CleanupResult:
         }
 
 
+def _kind_of(value: str) -> Kind | None:
+    """The kind a stored name stands for, or ``None`` when it is unknown."""
+    try:
+        return Kind(value)
+    except ValueError:
+        return None
+
+
+def _parent_kind(index: ScanIndex, scan_id: int, path: Path) -> Kind | None:
+    """The kind of the directory that holds a path.
+
+    A file inside a game folder is game data as well — DiskBOX protects the
+    whole subtree, not just the folder itself.
+    """
+    parent = path.parent
+    if parent == path:
+        return None
+    row = index.entry_by_path(scan_id, parent)
+    if row is None:
+        return None
+    return _kind_of(str(row["kind"]))
+
+
+def refusal_reason(index: ScanIndex, scan_id: int, path: Path) -> str | None:
+    """Why a path may not be cleaned — ``None`` when it may be.
+
+    Two rules are at work: the *protected* rules (system paths, platform
+    attributes, game data) refuse a whole subtree, and the *critical* rules
+    refuse a container as an item — the volume root, the users container, a
+    user's home — while leaving what is inside it cleanable.
+    """
+    row = index.entry_by_path(scan_id, path)
+    kind = _kind_of(str(row["kind"])) if row is not None else None
+    # The critical rule is the more specific one, so it explains first.
+    if is_critical(path):
+        return PROTECTED_CRITICAL
+    return protection_reason(path, kind, parent_kind=_parent_kind(index, scan_id, path))
+
+
 def stage(
     index: ScanIndex,
     scan_id: int,
@@ -84,17 +127,17 @@ def stage(
     """Add paths to the review list.
 
     Returns the newly staged items and the paths that were refused. Protected
-    paths are refused with an explanation rather than silently ignored.
+    and critical paths are refused with an explanation rather than silently
+    ignored.
     """
     staged: list[StagedItem] = []
     refused: list[ValidationIssue] = []
     now = time.time()
 
     for path in paths:
-        if is_protected(path):
-            refused.append(
-                ValidationIssue(path, "Protected game or application data cannot be staged.")
-            )
+        reason = refusal_reason(index, scan_id, path)
+        if reason is not None:
+            refused.append(ValidationIssue(path, reason))
             continue
         exists = index.connection.execute(
             "SELECT 1 FROM staged WHERE scan_id = ? AND path = ?",
@@ -173,8 +216,9 @@ def validate(index: ScanIndex, scan_id: int) -> tuple[list[StagedItem], list[Val
         if not item.path.exists():
             issues.append(ValidationIssue(item.path, "File no longer exists."))
             continue
-        if is_protected(item.path):
-            issues.append(ValidationIssue(item.path, "Path is protected and cannot be cleaned."))
+        reason = refusal_reason(index, scan_id, item.path)
+        if reason is not None:
+            issues.append(ValidationIssue(item.path, reason))
             continue
         row = index.entry_by_path(scan_id, item.path)
         if row is not None and int(row["size"]) != item.size:

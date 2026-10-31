@@ -13,6 +13,11 @@ Protection is decided by three independent signals:
 3. **Semantic role** — game files, DLC and saved games are protected because they
    are not reclaimable space.
 
+A second, narrower tier covers the containers that would break the machine if
+they were removed as a whole — the volume root, the users container, a user's
+home directory. Those are refused *as an item* while their contents stay
+cleanable (see :func:`critical_rules`).
+
 The scanner asks about *every* entry of a walk, so this module also carries a
 fast path (:func:`entry_is_protected`) that reuses what the parent directory
 already established instead of deriving the same facts again for every child.
@@ -95,6 +100,19 @@ _SYSTEM_DIR_NAMES = frozenset(
 #: Kinds whose contents are never reclaimable.
 _PROTECTED_KINDS = frozenset({Kind.GAME})
 
+#: Why an item was refused — these are the sentences the user reads.
+PROTECTED_GAME = "Protected game or application data cannot be staged."
+PROTECTED_SYSTEM = "System folders cannot be cleaned."
+PROTECTED_ATTRIBUTES = "The operating system marks this item as system or read-only."
+PROTECTED_CRITICAL = "This folder is required by the system or your account and cannot be cleaned."
+
+#: On macOS the writable data volume is mounted inside the sealed system
+#: volume, at ``/System/Volumes/Data``. Its contents mirror ``/`` — ``/Users``,
+#: ``/Applications``, ``/Library`` and ``/private`` are firmlinks into it — so a
+#: path that names the data volume *is* the path it mirrors and the rules have
+#: to be applied to that one.
+_MACOS_DATA_VOLUME = "/system/volumes/data"
+
 
 def _platform() -> str:
     """The key of the running platform in :data:`_SYSTEM_ROOTS`."""
@@ -111,7 +129,18 @@ def system_roots() -> tuple[str, ...]:
 
 
 def _norm(path: Path | str) -> str:
-    return str(path).replace("\\", "/").rstrip("/").lower()
+    """The comparison form of a path: slashes, no trailing slash, lower case.
+
+    On macOS the data volume is folded onto the root it mirrors, so
+    ``/System/Volumes/Data/Users/me`` is judged as ``/Users/me`` and the volume
+    itself as the root ``/``.
+    """
+    normalized = str(path).replace("\\", "/").rstrip("/").lower()
+    if normalized == _MACOS_DATA_VOLUME:
+        return ""
+    if normalized.startswith(_MACOS_DATA_VOLUME + "/"):
+        return normalized[len(_MACOS_DATA_VOLUME) :]
+    return normalized
 
 
 #: The system roots of this platform, normalised once instead of per lookup.
@@ -128,23 +157,34 @@ for _root in _NORMALIZED_ROOTS:
     _ROOT_PARENTS[_base] = _ROOT_PARENTS.get(_base, frozenset()) | {_parent}
 
 
-def is_system_path(path: Path | str) -> bool:
-    """True when ``path`` lives under a protected system root."""
-    normalized = _norm(path)
+def _is_system_normalized(normalized: str) -> bool:
+    """True when a normalised path lives under a protected system root."""
     for root in _NORMALIZED_ROOTS:
         if normalized == root or normalized.startswith(root + "/"):
             return True
     return False
 
 
+def is_system_path(path: Path | str) -> bool:
+    """True when ``path`` lives under a protected system root."""
+    return _is_system_normalized(_norm(path))
+
+
+def _has_system_name_normalized(normalized: str) -> bool:
+    """True when a normalised path carries a well-known OS directory name."""
+    return any(part in _SYSTEM_DIR_NAMES for part in normalized.split("/"))
+
+
 def has_system_name(path: Path | str) -> bool:
     """True when any component of ``path`` is a well-known OS directory name."""
-    parts = _norm(path).split("/")
-    return any(part in _SYSTEM_DIR_NAMES for part in parts)
+    return _has_system_name_normalized(_norm(path))
 
 
-def _attributes_protect(info: os.stat_result) -> bool:
+def _attributes_protect(info: os.stat_result | None) -> bool:
     """True when a stat result carries system or read-only attributes."""
+    if info is None:
+        return False
+
     # Windows: FILE_ATTRIBUTE_SYSTEM (0x4) / FILE_ATTRIBUTE_READONLY (0x1).
     attrs = getattr(info, "st_file_attributes", 0)
     if attrs & 0x4:
@@ -162,13 +202,48 @@ def _attributes_protect(info: os.stat_result) -> bool:
     return False
 
 
-def has_protected_attributes(path: Path) -> bool:
-    """True when the OS marks the entry itself as system or read-only."""
+def entry_stat(path: Path | str) -> os.stat_result | None:
+    """The stat of an entry, or ``None`` when it cannot be read."""
     try:
-        info = os.lstat(path)
+        return os.lstat(path)
     except OSError:
-        return False
-    return _attributes_protect(info)
+        return None
+
+
+def has_protected_attributes(path: Path | str) -> bool:
+    """True when the OS marks the entry itself as system or read-only."""
+    return _attributes_protect(entry_stat(path))
+
+
+def is_protected_kind(kind: Kind | None) -> bool:
+    """True when a kind is never reclaimable — game data and saved games."""
+    return kind in _PROTECTED_KINDS
+
+
+def protection_reason(
+    path: Path | str,
+    kind: Kind | None = None,
+    *,
+    parent_kind: Kind | None = None,
+) -> str | None:
+    """Why ``path`` may not be cleaned — ``None`` when it may be.
+
+    This is the one place that decides. The scanner's fast path
+    (:func:`entry_is_protected`) reaches the same verdict for the entries of a
+    walk; the cleanup gate and the folder listing use this function because it
+    also explains itself.
+
+    ``parent_kind`` is the kind of the directory that holds the path, so a file
+    inside a game folder is game data too.
+    """
+    if is_protected_kind(kind) or is_protected_kind(parent_kind):
+        return PROTECTED_GAME
+    normalized = _norm(path)
+    if _is_system_normalized(normalized) or _has_system_name_normalized(normalized):
+        return PROTECTED_SYSTEM
+    if _attributes_protect(entry_stat(path)):
+        return PROTECTED_ATTRIBUTES
+    return None
 
 
 def is_protected(path: Path, kind: Kind | None = None, *, inherited: bool = False) -> bool:
@@ -179,11 +254,71 @@ def is_protected(path: Path, kind: Kind | None = None, *, inherited: bool = Fals
     """
     if inherited:
         return True
-    if kind in _PROTECTED_KINDS:
+    return protection_reason(path, kind) is not None
+
+
+@dataclass(frozen=True, slots=True)
+class CriticalRules:
+    """The containers that may never be staged as a whole.
+
+    Their *contents* stay cleanable — only the container itself is refused.
+    """
+
+    roots: frozenset[str] = frozenset()
+    containers: frozenset[str] = frozenset()
+
+
+def critical_rules(platform: str | None = None, home: Path | str | None = None) -> CriticalRules:
+    """The critical containers of a platform.
+
+    ``platform`` and ``home`` default to the running system. They exist so the
+    rules of macOS, Windows and Linux can be built — and tested — anywhere.
+
+    The users container and the home directory are derived from the home path,
+    which is the same shape on all three platforms: the parent of the home is
+    the container that holds the accounts (``/Users``, ``C:\\Users``, ``/home``)
+    and every direct child of it is an account's own home.
+    """
+    key = platform or _platform()
+    home_path = Path(home) if home is not None else Path.home()
+    home_normalized = _norm(home_path)
+    container = home_normalized.rsplit("/", 1)[0] if "/" in home_normalized else ""
+
+    roots = {"", home_normalized}
+    containers: set[str] = set()
+    if container:
+        roots.add(container)
+        containers.add(container)
+    if key == "darwin":
+        roots |= {"/private", f"{home_normalized}/library"}
+    elif key == "linux":
+        roots |= {"/root", f"{home_normalized}/.config", f"{home_normalized}/.local"}
+    elif key == "win32":
+        roots |= {home_normalized.split("/")[0], f"{home_normalized}/appdata"}
+
+    return CriticalRules(roots=frozenset(roots), containers=frozenset(containers))
+
+
+#: The critical containers of the running system.
+_CRITICAL_RULES = critical_rules()
+
+
+def is_critical(path: Path | str, rules: CriticalRules | None = None) -> bool:
+    """True when ``path`` is a container that must never be staged as a whole.
+
+    Removing the volume root, the users container or a user's home directory
+    breaks the machine or the account; removing what is *inside* them does not.
+    That is why this is an exact-path rule and not a subtree rule.
+    """
+    active = rules if rules is not None else _CRITICAL_RULES
+    normalized = _norm(path)
+    if normalized in active.roots:
         return True
-    if is_system_path(path) or has_system_name(path):
+    # The root of another drive — "d:" on Windows.
+    if len(normalized) == 2 and normalized[1] == ":" and normalized[0].isalpha():
         return True
-    return has_protected_attributes(path)
+    parent = normalized.rsplit("/", 1)[0] if "/" in normalized else ""
+    return parent in active.containers
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,10 +344,15 @@ def guard_for(path: Path | str, *, protected: bool = False) -> DirGuard:
     return DirGuard(protected=protected, under_root=under_root, norm_path=normalized)
 
 
-def entry_is_protected(path: str, name: str, info: os.stat_result, guard: DirGuard) -> bool:
+def entry_is_protected(
+    path: str,
+    name: str,
+    info: os.stat_result | None,
+    guard: DirGuard,
+) -> bool:
     """True when an entry may not be staged for deletion.
 
-    This is the hot-path twin of :func:`is_protected`: it takes the stat
+    This is the hot-path twin of :func:`protection_reason`: it takes the stat
     result the caller already holds and the guard of the parent directory,
     and reaches the same verdict without touching the filesystem again.
     """

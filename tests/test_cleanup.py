@@ -77,7 +77,55 @@ def test_protected_paths_cannot_be_staged(
 
     assert added == []
     assert len(refused) == 1
-    assert "Protected" in refused[0].reason
+    assert "System folders" in refused[0].reason
+
+
+def test_critical_containers_are_refused(
+    scanned: tuple[ScanIndex, int, Path],
+) -> None:
+    """The home directory is needed — as an item it may not be staged."""
+    index, scan_id, _ = scanned
+
+    added, refused = stage(index, scan_id, [Path.home()])
+
+    assert added == []
+    assert len(refused) == 1
+    assert "required by the system" in refused[0].reason
+
+
+def test_game_folders_are_refused(tmp_path_factory: pytest.TempPathFactory) -> None:
+    """A game folder and the files inside it are never reclaimable."""
+    root = tmp_path_factory.mktemp("game")
+    game = root / "Steam"
+    game.mkdir()
+    (game / "save.dat").write_bytes(b"x")
+
+    index = ScanIndex(tmp_path_factory.mktemp("idx") / "index.db")
+    scan_id = Scanner(index, ScanOptions(root=root)).run().meta.scan_id
+
+    added, refused = stage(index, scan_id, [game, game / "save.dat"])
+
+    assert added == []
+    assert len(refused) == 2
+    assert all("Protected game" in issue.reason for issue in refused)
+
+
+def test_validation_refuses_an_item_that_became_critical(
+    scanned: tuple[ScanIndex, int, Path],
+) -> None:
+    """The last gate before the recycle bin applies the same rules."""
+    index, scan_id, root = scanned
+    stage(index, scan_id, [root / "junk.bin"])
+    index.connection.execute(
+        "UPDATE staged SET path = ? WHERE scan_id = ?", (str(Path.home()), scan_id)
+    )
+    index.connection.commit()
+
+    valid, issues = validate(index, scan_id)
+
+    assert valid == []
+    assert len(issues) == 1
+    assert "required by the system" in issues[0].reason
 
 
 def test_validation_detects_a_vanished_file(scanned: tuple[ScanIndex, int, Path]) -> None:
