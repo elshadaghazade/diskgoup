@@ -25,7 +25,13 @@ from typing import Any
 
 from diskgoup.core.kinds import classify_dir, classify_file
 from diskgoup.core.models import Kind, ScanMeta
-from diskgoup.core.protect import DirGuard, entry_is_protected, guard_for, is_protected
+from diskgoup.core.protect import (
+    DirGuard,
+    entry_is_protected,
+    guard_for,
+    is_protected,
+    is_protected_kind,
+)
 from diskgoup.core.store import ScanIndex, SubtreeTotals
 
 #: Attribute bit meaning "hidden" on Windows.
@@ -404,6 +410,9 @@ class Scanner:
                             kind = classify_dir(name, forced=cforced)
                             if profiling:
                                 profiler.add("classify", time.perf_counter() - mark)
+                            # Game data is never reclaimable — the same rule
+                            # the cleanup gate applies.
+                            protected = protected or is_protected_kind(kind)
                             child_path = Path(entry.path)
                             child_state = _DirState(parent=cstate)
                             child_id = self._insert_dir(
@@ -444,6 +453,7 @@ class Scanner:
                         kind = classify_file(name, parent_kind=cforced)
                         if profiling:
                             profiler.add("classify", time.perf_counter() - mark)
+                        protected = protected or is_protected_kind(kind)
                         size = int(st.st_size)
                         on_disk = _allocated_size(st)
                         state.files += 1

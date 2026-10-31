@@ -59,7 +59,14 @@ export default function Inspector({ scan, selected }: Props) {
           </dl>
         </div>
 
-        {selected.protected && (
+        {selected.critical && (
+          <div className="notice">
+            This folder is required by the system or your account — it cannot be cleaned. What is
+            inside it can be.
+          </div>
+        )}
+
+        {selected.protected && !selected.critical && (
           <div className="notice">
             This item is protected — it cannot be cleaned.
           </div>
