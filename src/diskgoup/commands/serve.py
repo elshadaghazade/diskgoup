@@ -763,7 +763,6 @@ class Server:
             result = commit(
                 index,
                 meta.scan_id,
-                to_trash=not bool(params.get("permanent", False)),
                 permanent=bool(params.get("permanent", False)),
             )
             return {"scan": meta.to_dict(), **result.to_dict()}
