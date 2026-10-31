@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import stat
 import sys
 from pathlib import Path
 
@@ -92,6 +93,42 @@ def _fake_stat() -> os.stat_result:
     return os.stat_result((0o100644, 1, 1, 1, 0, 0, 10, 0.0, 0.0, 0.0))
 
 
+def test_a_folder_the_user_named_like_a_system_one_is_cleanable(tmp_path: Path) -> None:
+    """Only the top of a volume holds system directories.
+
+    A folder called ``vm`` or ``update`` inside a home directory is ordinary
+    content. Refusing those refuses a large part of a normal disk — and a
+    disk cleaner that refuses most of what it finds is not much use.
+    """
+    for name in ("vm", "update", "recovery", "preboot", "system32", "windows"):
+        target = tmp_path / name
+        target.mkdir()
+        assert not is_protected(target), name
+        assert protection_reason(target) is None, name
+
+
+def test_a_system_directory_at_the_top_of_a_volume_is_protected() -> None:
+    for path in ("/vm", "/update", "/recovery"):
+        assert protection_reason(path) == PROTECTED_SYSTEM, path
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="the hidden flag is macOS")
+def test_a_hidden_file_outside_a_system_folder_is_cleanable(tmp_path: Path) -> None:
+    """The hidden flag only means something inside a system folder.
+
+    macOS marks ``.DS_Store`` and a few other files hidden. That says nothing
+    about them being the system's own — they are the files a user most wants
+    to get rid of.
+    """
+    target = tmp_path / ".DS_Store"
+    target.write_bytes(b"x")
+    os.chflags(target, stat.UF_HIDDEN)
+
+    assert target.stat().st_flags & stat.UF_HIDDEN
+    assert not is_protected(target)
+    assert protection_reason(target) is None
+
+
 #: (parent directory, child path, child name) triples covering the cases the
 #: fast path has to get right: a directory that *is* a system root, a child of
 #: one, a system directory name and ordinary content.
@@ -99,6 +136,7 @@ _FAST_PATH_CASES = (
     ("/", "/Library", "Library"),
     ("/", "/Applications", "Applications"),
     ("/", "/System", "System"),
+    ("/", "/vm", "vm"),
     ("/System", "/System/Library", "Library"),
     ("/private", "/private/var", "var"),
     ("/private/var", "/private/var/db", "db"),
@@ -106,6 +144,8 @@ _FAST_PATH_CASES = (
     ("/Users/someone/Downloads", "/Users/someone/Downloads/movie.mp4", "movie.mp4"),
     ("/Users/someone", "/Users/someone/System", "System"),
     ("/Users/someone", "/Users/someone/system32", "system32"),
+    ("/Users/someone", "/Users/someone/vm", "vm"),
+    ("/Users/someone/vm", "/Users/someone/vm/image.iso", "image.iso"),
     ("/Users/someone", "/Users/someone/notes.txt", "notes.txt"),
     # The macOS data volume — the folder the scan usually starts at.
     ("/System/Volumes/Data", "/System/Volumes/Data/Users", "Users"),

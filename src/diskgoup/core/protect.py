@@ -170,33 +170,53 @@ def is_system_path(path: Path | str) -> bool:
     return _is_system_normalized(_norm(path))
 
 
+def _first_component(normalized: str) -> str:
+    """The name of the directory a path sits in, at the top of a volume.
+
+    ``/users/someone`` → ``users``, ``/vm/x`` → ``vm``, ``c:/users`` → ``c:``.
+    """
+    return normalized.lstrip("/").split("/", 1)[0]
+
+
 def _has_system_name_normalized(normalized: str) -> bool:
-    """True when a normalised path carries a well-known OS directory name."""
-    return any(part in _SYSTEM_DIR_NAMES for part in normalized.split("/"))
+    """True when the path sits directly in a well-known OS directory.
+
+    Only the top of a volume counts. ``/vm`` and ``/update`` are system
+    directories; a folder the user happens to name ``vm`` — ``~/vm``,
+    ``~/REPOS/update`` — is ordinary content, and refusing those would refuse
+    a large part of a normal home directory.
+    """
+    return _first_component(normalized) in _SYSTEM_DIR_NAMES
 
 
 def has_system_name(path: Path | str) -> bool:
-    """True when any component of ``path`` is a well-known OS directory name."""
+    """True when the path sits directly in a well-known OS directory."""
     return _has_system_name_normalized(_norm(path))
 
 
-def _attributes_protect(info: os.stat_result | None) -> bool:
-    """True when a stat result carries system or read-only attributes."""
+def _attributes_protect(info: os.stat_result | None, *, in_system: bool = False) -> bool:
+    """True when a stat result carries system or read-only attributes.
+
+    ``in_system`` says whether the entry sits inside a protected system root.
+    The hidden flag only means something there: on macOS every dotfile in a
+    home directory carries it, and refusing those would refuse exactly the
+    files a user expects to clean.
+    """
     if info is None:
         return False
 
-    # Windows: FILE_ATTRIBUTE_SYSTEM (0x4) / FILE_ATTRIBUTE_READONLY (0x1).
+    # Windows: FILE_ATTRIBUTE_SYSTEM (0x4).
     attrs = getattr(info, "st_file_attributes", 0)
     if attrs & 0x4:
         return True
 
-    # Unix: the immutable/append-only flags and the hidden flag on macOS.
+    # Unix: the immutable/append-only flags — a deliberate "hands off".
     # The attribute is absent off macOS and can be unset on a stat result
     # that was not filled in by the operating system.
     flags = getattr(info, "st_flags", 0) or 0
     if flags & (stat.UF_IMMUTABLE | stat.UF_APPEND):
         return True
-    if sys.platform == "darwin" and flags & stat.UF_HIDDEN:
+    if in_system and sys.platform == "darwin" and flags & stat.UF_HIDDEN:
         return True
 
     return False
@@ -239,9 +259,10 @@ def protection_reason(
     if is_protected_kind(kind) or is_protected_kind(parent_kind):
         return PROTECTED_GAME
     normalized = _norm(path)
-    if _is_system_normalized(normalized) or _has_system_name_normalized(normalized):
+    in_system = _is_system_normalized(normalized)
+    if in_system or _has_system_name_normalized(normalized):
         return PROTECTED_SYSTEM
-    if _attributes_protect(entry_stat(path)):
+    if _attributes_protect(entry_stat(path), in_system=in_system):
         return PROTECTED_ATTRIBUTES
     return None
 
@@ -332,7 +353,20 @@ class DirGuard:
 
     protected: bool = False
     under_root: bool = False
+    #: The directory is the root of a volume — only there does the *name* of
+    #: an entry make it a system directory ("/vm", "/update").
+    at_root: bool = False
     norm_path: str = ""
+
+
+def _is_volume_root(normalized: str) -> bool:
+    """True when the normalised path is the root of a volume.
+
+    ``/`` on Unix, ``c:`` on Windows.
+    """
+    if normalized == "":
+        return True
+    return len(normalized) == 2 and normalized[1] == ":" and normalized[0].isalpha()
 
 
 def guard_for(path: Path | str, *, protected: bool = False) -> DirGuard:
@@ -341,7 +375,12 @@ def guard_for(path: Path | str, *, protected: bool = False) -> DirGuard:
     under_root = any(
         normalized == root or normalized.startswith(root + "/") for root in _NORMALIZED_ROOTS
     )
-    return DirGuard(protected=protected, under_root=under_root, norm_path=normalized)
+    return DirGuard(
+        protected=protected,
+        under_root=under_root,
+        at_root=_is_volume_root(normalized),
+        norm_path=normalized,
+    )
 
 
 def entry_is_protected(
@@ -359,11 +398,12 @@ def entry_is_protected(
     if guard.protected:
         return True
     lowered = name.lower()
-    if lowered in _SYSTEM_DIR_NAMES:
+    if guard.at_root and lowered in _SYSTEM_DIR_NAMES:
+        # A system directory at the top of a volume — "/vm", "/update".
         return True
     if not guard.under_root:
         parents = _ROOT_PARENTS.get(lowered)
         if parents is not None and guard.norm_path in parents:
             # The entry is a system root in its own right, e.g. "/Library".
             return True
-    return _attributes_protect(info)
+    return _attributes_protect(info, in_system=guard.under_root)
