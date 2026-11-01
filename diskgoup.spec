@@ -30,6 +30,7 @@ hiddenimports = [
     "diskgoup.core.archives",
     "diskgoup.core.cleanup",
     "diskgoup.core.duplicates",
+    "diskgoup.core.parallel",
     "diskgoup.core.games",
     "diskgoup.core.applications",
     "diskgoup.core.monitor",

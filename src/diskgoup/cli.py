@@ -7,6 +7,8 @@ process, which is why every command also speaks JSON (``--json``).
 
 from __future__ import annotations
 
+import multiprocessing
+
 import typer
 
 from diskgoup import __version__
@@ -84,6 +86,11 @@ serve.register(app)
 
 def run() -> None:
     """Console-script entry point."""
+    # A worker of a pool of processes starts this binary again. A frozen
+    # build has to be told to hand itself over to the worker instead of
+    # running the command line — this call is what does that, and it has to
+    # come before anything else the binary does.
+    multiprocessing.freeze_support()
     app()
 
 
