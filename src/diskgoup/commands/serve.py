@@ -68,6 +68,7 @@ BACKGROUND_METHODS = frozenset(
         "explore.age",
         "view.layout",
         "scans.remove",
+        "duplicates.find",
     }
 )
 
@@ -659,20 +660,20 @@ class Server:
             return {"scan": meta.to_dict(), **result.to_dict()}
 
     def _duplicates_find(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
-        from pathlib import Path
-
-        from diskgoup.core.duplicates import find_duplicates
+        from diskgoup.core.duplicates import search_scan
 
         with self._index() as index:
             meta = self._scan_for(index, params)
-            candidates = [
-                Path(row["path"]) for row in index.iter_entries(meta.scan_id) if not row["is_dir"]
-            ]
 
             def on_progress(message: str) -> None:
                 server.notify("duplicates.progress", {"stage": message})
 
-            report = find_duplicates(candidates, progress=on_progress)
+            report = search_scan(
+                index,
+                meta.scan_id,
+                progress=on_progress,
+                min_size=int(params.get("min_size", 0)),
+            )
             return {"scan": meta.to_dict(), **report.to_dict()}
 
     def _archives_list(self, params: dict[str, Any], server: Server) -> dict[str, Any]:

@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS hashes (
     scan_id  INTEGER NOT NULL REFERENCES scans(id) ON DELETE CASCADE,
     entry_id INTEGER NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
     size     INTEGER NOT NULL,
+    mtime    REAL    NOT NULL DEFAULT 0,
     sha256   TEXT    NOT NULL,
     PRIMARY KEY (scan_id, entry_id)
 );
@@ -107,7 +108,7 @@ CREATE INDEX IF NOT EXISTS idx_staged_scan ON staged(scan_id, status);
 """
 
 #: The schema version stored in the index. Bump it when ``_SCHEMA`` changes.
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 4
 
 #: The children of one folder.
 #:
@@ -126,6 +127,7 @@ _CHILDREN_SQL = "SELECT * FROM entries WHERE scan_id = ? AND parent_id = ?"
 _MIGRATIONS: dict[int, tuple[str, ...]] = {
     2: ("CREATE INDEX IF NOT EXISTS idx_entries_scan_depth ON entries(scan_id, depth)",),
     3: ("ALTER TABLE scans ADD COLUMN options TEXT",),
+    4: ("ALTER TABLE hashes ADD COLUMN mtime REAL NOT NULL DEFAULT 0",),
 }
 
 #: The rows of a subtree, from one entry down.
@@ -472,6 +474,67 @@ class ScanIndex:
             "SELECT * FROM entries WHERE scan_id = ? ORDER BY id",
             (scan_id,),
         )
+
+    def file_candidates(self, scan_id: int) -> Iterator[tuple[int, str, int, float, str]]:
+        """``(entry_id, path, size, mtime, kind)`` of every file of the scan.
+
+        Only the columns the caller needs are read. The whole row of every
+        entry of a volume scan is a lot of data to pull through Python when
+        four columns are enough.
+        """
+        yield from self._conn.execute(
+            "SELECT id, path, size, mtime, kind FROM entries WHERE scan_id = ? AND is_dir = 0",
+            (scan_id,),
+        )
+
+    def cached_hashes(self, scan_id: int) -> list[tuple[str, int, float, int, str]]:
+        """The digests remembered for a scan.
+
+        Every record is ``(path, size, mtime, entry_id, sha256)`` — the size
+        and the modification time are the ones the file had when it was
+        hashed, so a digest that no longer fits the file can be told apart
+        from one that does.
+        """
+        return [
+            (
+                str(row["path"]),
+                int(row["size"]),
+                float(row["mtime"]),
+                int(row["entry_id"]),
+                str(row["sha256"]),
+            )
+            for row in self._conn.execute(
+                "SELECT e.path AS path, h.size AS size, h.mtime AS mtime, "
+                "h.entry_id AS entry_id, h.sha256 AS sha256 "
+                "FROM hashes h JOIN entries e ON e.id = h.entry_id "
+                "WHERE h.scan_id = ?",
+                (scan_id,),
+            )
+        ]
+
+    def save_hashes(self, scan_id: int, records: Iterable[tuple[int, int, float, str]]) -> None:
+        """Remember the digests of a scan: ``(entry_id, size, mtime, sha256)``."""
+        rows = [
+            (scan_id, entry_id, size, mtime, digest)
+            for entry_id, size, mtime, digest in records
+            if entry_id > 0
+        ]
+        if not rows:
+            return
+        try:
+            self._conn.executemany(
+                "INSERT INTO hashes (scan_id, entry_id, size, mtime, sha256) "
+                "VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(scan_id, entry_id) DO UPDATE SET "
+                "size = excluded.size, mtime = excluded.mtime, sha256 = excluded.sha256",
+                rows,
+            )
+            self._conn.commit()
+        except sqlite3.OperationalError:
+            # A locked index must not leave the transaction open — that would
+            # hold the write lock the scan needs.
+            self._conn.rollback()
+            raise
 
     def count_entries(self, scan_id: int) -> int:
         row = self._conn.execute(

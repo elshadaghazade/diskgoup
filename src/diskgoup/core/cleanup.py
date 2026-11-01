@@ -78,6 +78,7 @@ class CleanupResult:
             "moved": [str(path) for path in self.moved],
             "failed": [{"path": str(p), "reason": r} for p, r in self.failed],
             "issues": [issue.to_dict() for issue in self.issues],
+            "freed": self.freed,
         }
 
 
