@@ -237,6 +237,10 @@ export type Application = {
   publisher: string | null
   uninstall_command: string | null
   source: string
+  /** The application belongs to the operating system and cannot be removed. */
+  protected: boolean
+  /** Why it cannot be removed. */
+  reason: string | null
 }
 
 export type MonitorSample = {

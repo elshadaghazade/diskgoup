@@ -69,6 +69,8 @@ BACKGROUND_METHODS = frozenset(
         "view.layout",
         "scans.remove",
         "duplicates.find",
+        "apps.list",
+        "apps.uninstall",
     }
 )
 
@@ -82,6 +84,9 @@ class Server:
         # pauses and stops a scan through it.
         self._scan_control: Any = None
         self._scan_lock = threading.Lock()
+        # The application inventory of the last listing — the removal of an
+        # application works on it instead of measuring every bundle again.
+        self._apps: Any = None
         self._register()
 
     # ------------------------------------------------------------------ setup
@@ -112,6 +117,7 @@ class Server:
                 "archives.preview": self._archives_preview,
                 "games.list": self._games_list,
                 "apps.list": self._apps_list,
+                "apps.uninstall": self._apps_uninstall,
                 "monitor.sample": self._monitor_sample,
                 "snapshots.list": self._snapshots_list,
                 "snapshots.save": self._snapshots_save,
@@ -710,7 +716,32 @@ class Server:
     def _apps_list(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
         from diskgoup.core.applications import discover
 
-        return discover().to_dict()
+        inventory = discover()
+        self._apps = inventory
+        return inventory.to_dict()
+
+    def _apps_uninstall(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
+        """Remove an application — the platform's own mechanism.
+
+        The application is taken from the inventory that was listed last, so
+        nothing the GUI sends can talk the CLI into removing another path.
+        """
+        from diskgoup.core.applications import discover, uninstall
+
+        wanted = str(params.get("id") or "")
+        inventory = self._apps if self._apps is not None else discover()
+        matches = [app for app in inventory.applications if app.id == wanted]
+        if not matches:
+            matches = [app for app in inventory.applications if app.name == wanted]
+        if not matches:
+            return {"ok": False, "message": "That application is not in the inventory."}
+
+        application = matches[0]
+        ok, message = uninstall(
+            application,
+            permanent=bool(params.get("permanent", False)),
+        )
+        return {"ok": ok, "message": message, "application": application.to_dict()}
 
     def _monitor_sample(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
         from diskgoup.core.monitor import Monitor
