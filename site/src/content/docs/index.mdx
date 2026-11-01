@@ -1,0 +1,76 @@
+---
+title: Documentation
+description: Cross-platform disk space analyzer and duplicate file finder for macOS, Linux and Windows.
+template: splash
+hero:
+  tagline: See exactly where your disk space went — by folder, by file type, by age and by content duplication.
+  actions:
+    - text: Get started
+      link: /getting-started/installation/
+      icon: right-arrow
+    - text: View the source
+      link: https://github.com/elshadaghazade/diskgoup
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+DiskGOup shows you where your disk space went and gives you a staged, reviewed
+cleanup flow instead of a one-click "delete my stuff".
+
+**The CLI is the product.** The Electron desktop app is a thin front-end that
+drives the CLI as a child process — if the GUI were deleted tomorrow, nothing
+would be lost.
+
+<CardGrid stagger>
+  <Card title="Installation" icon="rocket">
+    Install the CLI with `uv`, build the standalone binary with PyInstaller, or
+    grab a desktop build.
+    [Install →](/getting-started/installation/)
+  </Card>
+  <Card title="Quick start" icon="play">
+    Your first scan, your first treemap, your first duplicate search — in five
+    commands.
+    [Quick start →](/getting-started/quick-start/)
+  </Card>
+  <Card title="Cleaning up safely" icon="shield">
+    The staged review flow: stage, review, validate, confirm, revalidate,
+    recycle bin.
+    [Read the guide →](/guide/cleanup/)
+  </Card>
+  <Card title="CLI reference" icon="list-format">
+    Every command, every flag, and what it prints — including the `--json`
+    contract the desktop app depends on.
+    [CLI reference →](/reference/cli/)
+  </Card>
+  <Card title="Protection rules" icon="lock">
+    What the system refuses to delete, and why — system roots, platform
+    attributes, game data and critical containers.
+    [Protection rules →](/reference/protection/)
+  </Card>
+  <Card title="Architecture" icon="puzzle">
+    How the CLI, the SQLite index, the JSON-RPC bridge and the Electron front-end
+    fit together.
+    [Architecture →](/development/architecture/)
+  </Card>
+</CardGrid>
+
+## How it works
+
+```
+diskgoup-alternative/
+├── src/diskgoup/     Python CLI (uv project) — all the disk logic
+├── electron/         Electron main process (TypeScript)
+└── ui/               Vite + React renderer (TypeScript)
+```
+
+One scan powers every view: the walk is written into a persistent SQLite index,
+and the tree, the treemap, the search, the duplicate finder and the reports all
+read that same result set instead of touching the disk again.
+
+Nothing is ever deleted straight away:
+
+```
+stage → review → validate → confirm → revalidate → recycle bin
+```

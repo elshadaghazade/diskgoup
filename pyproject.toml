@@ -60,6 +60,10 @@ packages = ["src/diskgoup"]
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+# The documentation site is a separate Astro project. Ruff formats Python
+# code blocks inside Markdown, so without this a doc snippet in another style
+# would fail "ruff format --check" for the CLI project.
+extend-exclude = ["site"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF", "ANN"]
