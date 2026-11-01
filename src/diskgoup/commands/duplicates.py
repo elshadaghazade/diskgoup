@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import typer
 from rich.table import Table
 
 from diskgoup.commands.common import console, emit, ensure_scan, is_json, open_index
-from diskgoup.core.duplicates import find_duplicates
+from diskgoup.core.duplicates import search_scan
 from diskgoup.util.humanize import human_bytes, human_count
 
 
@@ -33,24 +31,18 @@ def duplicates_command(
     with open_index() as index:
         meta = ensure_scan(index, path, scan_id=scan_id, rescan=rescan)
 
-        candidates: list[Path] = []
-        for row in index.iter_entries(meta.scan_id):
-            if row["is_dir"]:
-                continue
-            size = int(row["size"])
-            if size < min_size:
-                continue
-            if max_size is not None and size > max_size:
-                continue
-            if kind and row["kind"] != kind:
-                continue
-            candidates.append(Path(row["path"]))
-
         def on_progress(message: str) -> None:
             if not is_json():
                 console.print(f"[dim]{message}[/dim]")
 
-        report = find_duplicates(candidates, progress=on_progress)
+        report = search_scan(
+            index,
+            meta.scan_id,
+            progress=on_progress,
+            min_size=min_size,
+            max_size=max_size,
+            kind=kind,
+        )
         groups = report.groups[:limit] if limit else report.groups
 
         if is_json():
