@@ -958,6 +958,23 @@ table.data td.path {
   word-break: break-all;
 }
 
+/* The copy that is kept of a duplicate group — one radio per copy. */
+.dup-keep {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  cursor: pointer;
+}
+
+.dup-keep input {
+  margin: 0;
+  accent-color: var(--accent, #58a6ff);
+}
+
+.dup-keep .name {
+  font-family: var(--mono, ui-monospace, monospace);
+}
+
 .kind-dot {
   display: inline-block;
   width: 8px;

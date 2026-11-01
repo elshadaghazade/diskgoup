@@ -216,5 +216,6 @@ export const api = {
       moved: string[]
       failed: { path: string; reason: string }[]
       issues: { path: string; reason: string }[]
+      freed: number
     }>('cleanup.commit', { ...refParams(ref), permanent }),
 }

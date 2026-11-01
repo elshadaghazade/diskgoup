@@ -7,9 +7,18 @@ import ConfirmDialog from './ConfirmDialog'
 type Props = {
   scanRef: ScanRef
   onClose: () => void
-  /** The paths that were removed, and whether they went for good. */
-  onCommitted: (moved: string[], permanent: boolean) => void
+  /** The paths that were removed, whether they went for good, and the space. */
+  onCommitted: (moved: string[], permanent: boolean, freed: number) => void
 }
+
+/**
+ * How many items are drawn.
+ *
+ * A cleanup of a whole scan can hold tens of thousands of items, and a list
+ * that long would lock the window. The rest is still counted — and still
+ * removed.
+ */
+const LIMIT = 500
 
 /**
  * The review list.
@@ -81,7 +90,7 @@ export default function CleanupDialog({ scanRef, onClose, onCommitted }: Props) 
         setTotal(listed.total)
         return
       }
-      if (result.moved.length > 0) onCommitted(result.moved, permanent)
+      if (result.moved.length > 0) onCommitted(result.moved, permanent, result.freed)
       else onClose()
     } catch (err) {
       setError((err as Error).message)
@@ -114,7 +123,7 @@ export default function CleanupDialog({ scanRef, onClose, onCommitted }: Props) 
               </div>
             ) : (
               <div className="cleanup-list">
-                {items.map((item) => (
+                {items.slice(0, LIMIT).map((item) => (
                   <div className="row" key={item.path}>
                     <span className="name" title={item.path}>
                       {baseName(item.path)}
@@ -131,6 +140,13 @@ export default function CleanupDialog({ scanRef, onClose, onCommitted }: Props) 
                     </button>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {items.length > LIMIT && (
+              <div className="browser-note">
+                Showing the first {count(LIMIT)} of {count(items.length)} items — the rest is
+                removed with them.
               </div>
             )}
 
