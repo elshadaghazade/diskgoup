@@ -177,7 +177,8 @@ that runs anywhere, with no Python installation required.
 diskgoup-alternative/
 ├── src/diskgoup/     Python CLI (uv project) — all the disk logic
 ├── electron/         Electron main process (TypeScript)
-└── ui/               Vite + React renderer (TypeScript)
+├── ui/               Vite + React renderer (TypeScript)
+└── site/             Astro + Starlight documentation site
 ```
 
 The renderer contains **no disk logic**. The Electron main process spawns the

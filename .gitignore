@@ -30,7 +30,9 @@ Thumbs.db
 # Local
 .env
 *.local
-docs/
+# Anchored: only the top-level docs/ notes stay local. The documentation
+# site lives in site/ and its content collection is site/src/content/docs/.
+/docs/
 README2.md
 
 # AI / editor assistants — kept on this machine, never committed
@@ -44,5 +46,11 @@ AGENTS.md
 .continue/
 .clinerules
 .codeium/
+.gemini/
+GEMINI.md
+.windsurf/
+.windsurfrules
+.mcp.json
 .github/copilot-instructions.md
+.github/instructions/
 *.prompt.md
