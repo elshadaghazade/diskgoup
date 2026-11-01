@@ -20,7 +20,7 @@ buffer is not a maximum searchable file size.
 Zero-byte files are excluded, and hard links pointing at the same underlying
 file are excluded.
 
-Three things make the search usable on a real disk rather than only on a folder
+Four things make the search usable on a real disk rather than only on a folder
 of test files:
 
 * The **size comes from the scan index**. The search never asks the disk how
@@ -33,6 +33,11 @@ of test files:
   digests are kept in the index and reused while the file still has the size
   and the modification time it had when it was hashed. The second search of a
   scan does not read the files again.
+* The **work runs on several workers at a time**. Every stage of the pipeline
+  reads and hashes files, and the work of one file is mostly bookkeeping in
+  Python — which is what the GIL holds on to. A stage of many files is
+  therefore handed to a pool of processes, and a stage of a few files to a
+  pool of threads, which start far more quickly.
 """
 
 from __future__ import annotations
@@ -42,9 +47,11 @@ import hashlib
 import os
 import sqlite3
 from collections.abc import Callable, Iterable, Sequence
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from diskgoup.core.parallel import Pool
 from diskgoup.core.store import ScanIndex
 
 #: Bytes read for the prefix sample.
@@ -58,6 +65,9 @@ CHUNK = 1024 * 1024
 
 #: How many files are read between two progress messages.
 PROGRESS_EVERY = 250
+
+#: What a worker is given: the path of a file and the size it has.
+Payload = tuple[str, int]
 
 
 @dataclass(slots=True)
@@ -208,36 +218,49 @@ def _drop_hard_links(candidates: Sequence[Candidate]) -> list[Candidate]:
     return result
 
 
-def _sample(path: Path, offset: int, length: int) -> bytes:
+def _sample(path: str, offset: int, length: int) -> bytes:
     """Read ``length`` bytes at ``offset``; fewer bytes at the end of a file."""
     try:
-        with path.open("rb") as handle:
+        with open(path, "rb") as handle:
             handle.seek(offset)
             return handle.read(length)
     except OSError:
         return b""
 
 
-def _prefix_digest(candidate: Candidate) -> str:
-    return hashlib.sha256(_sample(candidate.path, 0, PREFIX_SAMPLE)).hexdigest()
+def _prefix_digest(payload: Payload) -> str:
+    """Digest of the head of a file."""
+    path, _size = payload
+    return hashlib.sha256(_sample(path, 0, PREFIX_SAMPLE)).hexdigest()
 
 
-def _middle_tail_digest(candidate: Candidate) -> str:
-    """Digest of bounded samples from the middle and the tail of a file."""
-    size = candidate.size
+def _middle_tail_digest(payload: Payload) -> str:
+    """Digest of bounded samples from the middle and the tail of a file.
+
+    Both samples come out of one open file — the middle and the tail of a
+    file are two seeks, not two opens.
+    """
+    path, size = payload
     middle_offset = max(0, (size // 2) - (MIDDLE_SAMPLE // 2))
     tail_offset = max(0, size - TAIL_SAMPLE)
     digest = hashlib.sha256()
-    digest.update(_sample(candidate.path, middle_offset, MIDDLE_SAMPLE))
-    digest.update(_sample(candidate.path, tail_offset, TAIL_SAMPLE))
+    try:
+        with open(path, "rb") as handle:
+            handle.seek(middle_offset)
+            digest.update(handle.read(MIDDLE_SAMPLE))
+            handle.seek(tail_offset)
+            digest.update(handle.read(TAIL_SAMPLE))
+    except OSError:
+        pass
     return digest.hexdigest()
 
 
-def _full_digest(path: Path) -> str | None:
+def _full_digest(payload: Payload) -> str | None:
     """SHA-256 of the whole file, streamed."""
+    path, _size = payload
     digest = hashlib.sha256()
     try:
-        with path.open("rb") as handle:
+        with open(path, "rb") as handle:
             while chunk := handle.read(CHUNK):
                 digest.update(chunk)
     except OSError:
@@ -245,12 +268,12 @@ def _full_digest(path: Path) -> str | None:
     return digest.hexdigest()
 
 
-def _identical(left: Path, right: Path) -> bool:
+def _identical(left: str, right: str) -> bool:
     """True when two files have byte-for-byte identical content."""
     try:
-        if left.stat().st_size != right.stat().st_size:
+        if os.stat(left).st_size != os.stat(right).st_size:
             return False
-        with left.open("rb") as first, right.open("rb") as second:
+        with open(left, "rb") as first, open(right, "rb") as second:
             while True:
                 a = first.read(CHUNK)
                 b = second.read(CHUNK)
@@ -262,6 +285,11 @@ def _identical(left: Path, right: Path) -> bool:
         return False
 
 
+def _same_bytes(pair: tuple[str, str]) -> bool:
+    """True when the two files of a pair have identical content."""
+    return _identical(pair[0], pair[1])
+
+
 def _group_by(
     candidates: Iterable[Candidate], key: Callable[[Candidate], object]
 ) -> list[list[Candidate]]:
@@ -269,6 +297,18 @@ def _group_by(
     for candidate in candidates:
         buckets.setdefault(key(candidate), []).append(candidate)
     return [group for group in buckets.values() if len(group) > 1]
+
+
+def _shared(candidates: Sequence[Candidate], key: Callable[[Candidate], object]) -> list[Candidate]:
+    """The candidates whose key is shared with another candidate.
+
+    A candidate with a key of its own cannot be a duplicate of anything, so
+    the pipeline never reads it again.
+    """
+    buckets: dict[object, list[Candidate]] = {}
+    for candidate in candidates:
+        buckets.setdefault(key(candidate), []).append(candidate)
+    return [candidate for bucket in buckets.values() if len(bucket) > 1 for candidate in bucket]
 
 
 def _candidates(items: Iterable[Path | Candidate], report: DuplicateReport) -> list[Candidate]:
@@ -303,13 +343,77 @@ def _ordered(candidates: Sequence[Candidate]) -> list[Candidate]:
     return [keeper, *sorted(oldest[1:], key=lambda item: str(item.path))]
 
 
+def _fresh(candidate: Candidate) -> tuple[int, float]:
+    """The size and the modification time the file has now.
+
+    The file may have changed since the scan; the digest is taken from what
+    it holds now, so the group reports the size it really has.
+    """
+    try:
+        info = os.stat(candidate.path)
+    except OSError:
+        return candidate.size, candidate.mtime
+    return info.st_size, info.st_mtime
+
+
+def _hashed(
+    candidates: Sequence[Candidate],
+    digests: dict[str, str],
+    cache: HashCache | None,
+    pool: Pool,
+) -> list[Candidate]:
+    """The candidates whose whole file was hashed, with their digests kept.
+
+    The size and the modification time are asked for here, in one place, so
+    that the digest cache can be checked without a worker having to know
+    about it — and so that a worker only has to read and hash.
+    """
+    payloads: list[Payload] = []
+    pending: dict[str, Candidate] = {}
+    alive: list[Candidate] = []
+    for candidate in candidates:
+        size, mtime = _fresh(candidate)
+        if size == 0:
+            # The file is empty now — it cannot be a copy of anything.
+            continue
+        candidate.size = size
+        candidate.mtime = mtime
+        path = str(candidate.path)
+        known = cache.get(path, size, mtime) if cache is not None else None
+        if known is not None:
+            digests[path] = known
+            alive.append(candidate)
+            continue
+        payloads.append((path, size))
+        pending[path] = candidate
+
+    digests_found = pool.run(_full_digest, payloads)
+    for (path, size), digest in zip(payloads, digests_found, strict=True):
+        if digest is None:
+            continue
+        candidate = pending[path]
+        digests[path] = digest
+        if cache is not None:
+            cache.put(path, size, candidate.mtime, candidate.entry_id, digest)
+        alive.append(candidate)
+    return alive
+
+
 def find_duplicates(
     candidates: Iterable[Path | Candidate],
     *,
     progress: Callable[[str], None] | None = None,
     cache: HashCache | None = None,
+    workers: int | None = None,
+    processes: bool | None = None,
 ) -> DuplicateReport:
-    """Find groups of byte-identical files among ``candidates``."""
+    """Find groups of byte-identical files among ``candidates``.
+
+    Every stage of the pipeline hands its files to a pool of workers, so
+    that a stage reads and hashes several files at a time instead of one
+    after the other. A stage of many files runs on processes, a stage of a
+    few on threads — see :mod:`diskgoup.core.parallel`.
+    """
     report = DuplicateReport()
     ticker = _Ticker(progress)
 
@@ -326,73 +430,102 @@ def find_duplicates(
     if not size_groups:
         return report
 
-    # Stages 2 to 4 — sampling and hashing.
-    digests: dict[str, str] = {}
-    digest_groups: list[list[Candidate]] = []
-    read = 0
-    total = sum(len(group) for group in size_groups)
-    for group in size_groups:
-        digest_groups.extend(_digests_of_group(group, digests, cache))
-        read += len(group)
-        ticker.step(read, total, f"read {read} of {total} files")
-    ticker.say(f"{len(digest_groups)} groups after SHA-256")
-    if not digest_groups:
-        return report
-
-    # Stage 5 — exact byte comparison.
-    for group in digest_groups:
-        members = _drop_hard_links(_ordered(group))
-        if len(members) < 2:
-            continue
-        if not _identical(members[0].path, members[1].path):
-            # The digests match but the bytes do not: a collision. The group
-            # is split by comparing the bytes of every member.
-            for cluster in _identical_clusters(members):
-                report.groups.append(_group_of(cluster, digests))
-            continue
-        report.groups.append(_group_of(members, digests))
+    # The pool decides the backend per stage: a stage of many files runs on
+    # processes, a stage of a few on threads.
+    pool = Pool(workers, processes=processes)
+    try:
+        try:
+            _search(items, report, ticker, cache, pool)
+        except BrokenProcessPool:
+            # The workers did not start — a machine that does not allow a
+            # process of its own is not a reason to fail the search.
+            report.groups.clear()
+            pool.close()
+            pool = Pool(workers, processes=False)
+            _search(items, report, ticker, cache, pool)
+    finally:
+        pool.close()
 
     report.groups.sort(key=lambda group: (-group.reclaimable, str(group.paths[0])))
     ticker.say(f"{len(report.groups)} duplicate groups")
     return report
 
 
-def _digests_of_group(
-    group: list[Candidate], digests: dict[str, str], cache: HashCache | None
-) -> list[list[Candidate]]:
-    """The groups of identical files inside one size group.
+def _search(
+    items: Sequence[Candidate],
+    report: DuplicateReport,
+    ticker: _Ticker,
+    cache: HashCache | None,
+    pool: Pool,
+) -> None:
+    """Run the pipeline over the candidates and fill the report with groups."""
+    digests: dict[str, str] = {}
+    total = len(items)
 
-    A file that fits in the prefix sample is hashed straight away: the
-    samples would only repeat what the hash already says, and one read of
-    the file is enough for all of it. A bigger file is sampled first — the
-    head, then the middle and the tail — and only what survives all of that
-    is read whole.
-    """
-    if group[0].size <= PREFIX_SAMPLE:
-        alive: list[Candidate] = []
-        for candidate in group:
-            if _digest_of(candidate, digests, cache) is not None:
-                alive.append(candidate)
-        return _group_by(alive, lambda item: digests[str(item.path)])
+    # A file that fits in the prefix sample is hashed straight away: the
+    # samples would only repeat what the hash already says, and one read of
+    # the file is enough for all of it.
+    small = [candidate for candidate in items if candidate.size <= PREFIX_SAMPLE]
+    large = [candidate for candidate in items if candidate.size > PREFIX_SAMPLE]
+
+    alive = _hashed(small, digests, cache, pool)
+    ticker.step(len(small), total, f"hashed {len(small)} of {total} files")
 
     # Stage 2 — prefix sampling.
-    heads = {str(candidate.path): _prefix_digest(candidate) for candidate in group}
-    after_head: list[Candidate] = []
-    for cluster in _group_by(group, lambda item: heads[str(item.path)]):
-        after_head.extend(cluster)
+    payloads = [(str(candidate.path), candidate.size) for candidate in large]
+    heads = {
+        path: digest
+        for (path, _size), digest in zip(payloads, pool.run(_prefix_digest, payloads), strict=True)
+    }
+    large = _shared(large, lambda candidate: (candidate.size, heads[str(candidate.path)]))
+    ticker.step(len(small) + len(large), total, f"sampled {len(large)} of {total} files")
 
     # Stage 3 — bounded middle/tail sampling.
-    middles = {str(candidate.path): _middle_tail_digest(candidate) for candidate in after_head}
-    after_middle: list[Candidate] = []
-    for cluster in _group_by(after_head, lambda item: middles[str(item.path)]):
-        after_middle.extend(cluster)
+    payloads = [(str(candidate.path), candidate.size) for candidate in large]
+    middles = {
+        path: digest
+        for (path, _size), digest in zip(
+            payloads, pool.run(_middle_tail_digest, payloads), strict=True
+        )
+    }
+    large = _shared(
+        large,
+        lambda candidate: (
+            candidate.size,
+            heads[str(candidate.path)],
+            middles[str(candidate.path)],
+        ),
+    )
+    ticker.step(len(small) + len(large), total, f"sampled {len(large)} of {total} files")
 
     # Stage 4 — full SHA-256.
-    alive = []
-    for candidate in after_middle:
-        if _digest_of(candidate, digests, cache) is not None:
-            alive.append(candidate)
-    return _group_by(alive, lambda item: digests[str(item.path)])
+    alive += _hashed(large, digests, cache, pool)
+    ticker.step(total, total, f"hashed {total} of {total} files")
+
+    digest_groups = _group_by(alive, lambda candidate: digests[str(candidate.path)])
+    ticker.say(f"{len(digest_groups)} groups after SHA-256")
+    if not digest_groups:
+        return
+
+    # Stage 5 — exact byte comparison.
+    members: list[list[Candidate]] = []
+    pairs: list[tuple[str, str]] = []
+    for group in digest_groups:
+        kept = _drop_hard_links(_ordered(group))
+        if len(kept) < 2:
+            continue
+        members.append(kept)
+        pairs.append((str(kept[0].path), str(kept[1].path)))
+
+    verdicts = pool.run(_same_bytes, pairs)
+    for kept, same in zip(members, verdicts, strict=True):
+        if same:
+            report.groups.append(_group_of(kept, digests))
+            continue
+        # The digests match but the bytes do not: a collision. The group is
+        # split by comparing the bytes of every member.
+        for cluster in _identical_clusters(kept):
+            report.groups.append(_group_of(cluster, digests))
 
 
 def _group_of(members: Sequence[Candidate], digests: dict[str, str]) -> DuplicateGroup:
@@ -406,43 +539,6 @@ def _group_of(members: Sequence[Candidate], digests: dict[str, str]) -> Duplicat
     )
 
 
-def _digest_of(
-    candidate: Candidate, digests: dict[str, str], cache: HashCache | None
-) -> str | None:
-    """The digest of a file — from memory when it is still valid."""
-    known = digests.get(str(candidate.path))
-    if known is not None:
-        return known
-
-    size, mtime = candidate.size, candidate.mtime
-    try:
-        info = os.stat(candidate.path)
-        size, mtime = info.st_size, info.st_mtime
-        if size == 0:
-            # The file is empty now — it cannot be a copy of anything.
-            return None
-        # The file may have changed since the scan; the digest is taken from
-        # what it holds now, so the group reports the size it really has.
-        candidate.size = size
-        candidate.mtime = mtime
-    except OSError:
-        pass
-
-    if cache is not None:
-        known = cache.get(str(candidate.path), size, mtime)
-        if known is not None:
-            digests[str(candidate.path)] = known
-            return known
-
-    digest = _full_digest(candidate.path)
-    if digest is None:
-        return None
-    digests[str(candidate.path)] = digest
-    if cache is not None:
-        cache.put(str(candidate.path), size, mtime, candidate.entry_id, digest)
-    return digest
-
-
 def _identical_clusters(group: Sequence[Candidate]) -> list[list[Candidate]]:
     """Split a group into byte-identical clusters.
 
@@ -453,7 +549,7 @@ def _identical_clusters(group: Sequence[Candidate]) -> list[list[Candidate]]:
     clusters: list[list[Candidate]] = [[group[0]]]
     for candidate in group[1:]:
         for cluster in clusters:
-            if _identical(cluster[0].path, candidate.path):
+            if _identical(str(cluster[0].path), str(candidate.path)):
                 cluster.append(candidate)
                 break
         else:
@@ -469,6 +565,8 @@ def search_scan(
     min_size: int = 0,
     max_size: int | None = None,
     kind: str | None = None,
+    workers: int | None = None,
+    processes: bool | None = None,
 ) -> DuplicateReport:
     """Find the duplicate groups of a scan.
 
@@ -476,21 +574,25 @@ def search_scan(
     and the digests that were computed before are reused, so a repeated search
     does not read the files again.
     """
-    items: list[Candidate] = []
-    for entry_id, path, size, mtime, entry_kind in index.file_candidates(scan_id):
-        if size < min_size:
-            continue
-        if max_size is not None and size > max_size:
-            continue
-        if kind is not None and entry_kind != kind:
-            continue
-        items.append(Candidate(path=Path(path), size=size, mtime=mtime, entry_id=entry_id))
+    # The index drops the files whose size no other file has: they cannot be
+    # a duplicate of anything, so the search never even looks at them.
+    items = [
+        Candidate(path=Path(path), size=size, mtime=mtime, entry_id=entry_id)
+        for entry_id, path, size, mtime, _kind in index.duplicate_candidates(
+            scan_id, min_size=min_size, max_size=max_size, kind=kind
+        )
+    ]
 
     cache = HashCache()
     for path, size, mtime, entry_id, digest in index.cached_hashes(scan_id):
         cache.known[path] = (size, mtime, entry_id, digest)
 
-    report = find_duplicates(items, progress=progress, cache=cache)
+    report = find_duplicates(
+        items, progress=progress, cache=cache, workers=workers, processes=processes
+    )
+    # The number of candidates is every file the filters let through, not
+    # only the ones that share their size with another file.
+    report.candidates = index.count_files(scan_id, min_size=min_size, max_size=max_size, kind=kind)
     _remember(index, scan_id, cache)
     return report
 

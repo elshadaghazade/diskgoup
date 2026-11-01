@@ -487,6 +487,67 @@ class ScanIndex:
             (scan_id,),
         )
 
+    def _candidate_filters(
+        self,
+        alias: str,
+        scan_id: int,
+        min_size: int,
+        max_size: int | None,
+        kind: str | None,
+    ) -> tuple[str, list[Any]]:
+        """The ``WHERE`` clause of the duplicate candidates, and its values."""
+        filters = [f"{alias}scan_id = ?", f"{alias}is_dir = 0", f"{alias}size > 0"]
+        values: list[Any] = [scan_id]
+        if min_size > 0:
+            filters.append(f"{alias}size >= ?")
+            values.append(min_size)
+        if max_size is not None:
+            filters.append(f"{alias}size <= ?")
+            values.append(max_size)
+        if kind is not None:
+            filters.append(f"{alias}kind = ?")
+            values.append(kind)
+        return " AND ".join(filters), values
+
+    def duplicate_candidates(
+        self,
+        scan_id: int,
+        *,
+        min_size: int = 0,
+        max_size: int | None = None,
+        kind: str | None = None,
+    ) -> Iterator[tuple[int, str, int, float, str]]:
+        """``(entry_id, path, size, mtime, kind)`` of the files that may have a copy.
+
+        A file whose size no other file of the scan has can never be a
+        duplicate of anything, so the index drops it before it reaches
+        Python — a scan of a whole volume does not build a candidate for
+        every file on it. The rows come out ordered by size, so the size
+        groups are consecutive runs.
+        """
+        outer, outer_values = self._candidate_filters("e.", scan_id, min_size, max_size, kind)
+        inner, inner_values = self._candidate_filters("", scan_id, min_size, max_size, kind)
+        query = (
+            "SELECT e.id, e.path, e.size, e.mtime, e.kind FROM entries e "
+            f"WHERE {outer} AND e.size IN ("
+            f"SELECT size FROM entries WHERE {inner} GROUP BY size HAVING COUNT(*) > 1"
+            ") ORDER BY e.size"
+        )
+        yield from self._conn.execute(query, outer_values + inner_values)
+
+    def count_files(
+        self,
+        scan_id: int,
+        *,
+        min_size: int = 0,
+        max_size: int | None = None,
+        kind: str | None = None,
+    ) -> int:
+        """How many files of a scan the filters let through."""
+        where, values = self._candidate_filters("", scan_id, min_size, max_size, kind)
+        row = self._conn.execute(f"SELECT COUNT(*) FROM entries WHERE {where}", values).fetchone()
+        return int(row[0]) if row else 0
+
     def cached_hashes(self, scan_id: int) -> list[tuple[str, int, float, int, str]]:
         """The digests remembered for a scan.
 

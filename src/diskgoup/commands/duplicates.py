@@ -22,6 +22,9 @@ def duplicates_command(
     limit: int = typer.Option(0, help="Show at most this many groups (0 = all)."),
     scan_id: int | None = typer.Option(None, help="Use a specific scan id."),
     rescan: bool = typer.Option(False, help="Rescan before searching."),
+    jobs: int = typer.Option(
+        0, "--jobs", help="How many workers read and hash the files (0 = automatic)."
+    ),
 ) -> None:
     """Find files with identical content.
 
@@ -42,6 +45,7 @@ def duplicates_command(
             min_size=min_size,
             max_size=max_size,
             kind=kind,
+            workers=jobs or None,
         )
         groups = report.groups[:limit] if limit else report.groups
 

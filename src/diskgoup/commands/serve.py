@@ -673,6 +673,7 @@ class Server:
                 meta.scan_id,
                 progress=on_progress,
                 min_size=int(params.get("min_size", 0)),
+                workers=int(params.get("jobs", 0)) or None,
             )
             return {"scan": meta.to_dict(), **report.to_dict()}
 
