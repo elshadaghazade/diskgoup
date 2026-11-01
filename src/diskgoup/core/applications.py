@@ -13,6 +13,11 @@ The discovery is platform-native:
 Uninstalling is deliberately conservative: the platform's own uninstaller is
 run where one exists, and the inventory is re-measured afterwards. Shared data
 is never cleaned up — that is the uninstaller's business, not ours.
+
+The applications of the operating system itself are never removed. They live
+in the folders the system owns — on macOS some of them are linked into
+``/Applications`` — and they are reported with the reason, so the user sees
+why they are off limits instead of a silent no-op.
 """
 
 from __future__ import annotations
@@ -23,6 +28,21 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+
+#: Why an application may not be removed.
+SYSTEM_APP = "This application belongs to the operating system and cannot be removed."
+SYSTEM_PACKAGE = "This application was installed by the system package manager — remove it there."
+
+#: The folders that hold the applications of the operating system itself.
+_SYSTEM_APP_ROOTS: dict[str, tuple[str, ...]] = {
+    "macos": ("/system",),
+    "windows": ("c:/windows",),
+    "linux": (
+        "/usr/share/applications",
+        "/usr/local/share/applications",
+        "/var/lib/flatpak",
+    ),
+}
 
 
 @dataclass(slots=True)
@@ -36,6 +56,10 @@ class Application:
     publisher: str | None = None
     uninstall_command: str | None = None
     source: str = "unknown"
+    #: The application belongs to the operating system and cannot be removed.
+    protected: bool = False
+    #: Why it cannot be removed.
+    reason: str | None = None
 
     @property
     def id(self) -> str:
@@ -52,6 +76,8 @@ class Application:
             "publisher": self.publisher,
             "uninstall_command": self.uninstall_command,
             "source": self.source,
+            "protected": self.protected,
+            "reason": self.reason,
         }
 
 
@@ -109,7 +135,7 @@ def _macos_applications() -> list[Application]:
                     size=directory_size(bundle),
                     version=version,
                     source="macos",
-                    uninstall_command=f'rm -rf "{bundle}"',
+                    uninstall_command=f'Move "{bundle}" to the Trash',
                 )
             )
     return apps
@@ -217,6 +243,64 @@ def _parse_desktop(entry: Path) -> dict[str, str]:
 # ------------------------------------------------------------------ public
 
 
+def _normalized(path: Path | str) -> str:
+    """The comparison form of a path: slashes, no trailing slash, lower case."""
+    normalized = str(path).replace("\\", "/").rstrip("/").lower()
+    if not normalized.startswith("/"):
+        normalized = "/" + normalized
+    return normalized
+
+
+def _under(path: Path | str, root: str) -> bool:
+    """True when ``path`` is ``root`` or lies inside it."""
+    normalized = _normalized(path)
+    base = _normalized(root)
+    return normalized == base or normalized.startswith(base + "/")
+
+
+def _under_any(path: Path | str, roots: tuple[str, ...]) -> bool:
+    """True when ``path`` lies inside one of ``roots``."""
+    return any(_under(path, root) for root in roots)
+
+
+def _resolved(path: Path) -> str:
+    """The path a bundle really lives at, following links."""
+    try:
+        return str(path.resolve())
+    except OSError:
+        return str(path)
+
+
+def _platform_key(platform: str | None = None) -> str:
+    """The key of a platform in :data:`_SYSTEM_APP_ROOTS`."""
+    key = platform or sys.platform
+    if key.startswith("win"):
+        return "windows"
+    if key == "darwin":
+        return "macos"
+    return "linux"
+
+
+def system_reason(application: Application, *, platform: str | None = None) -> str | None:
+    """Why the application belongs to the system — ``None`` when it does not.
+
+    The applications of the operating system live in the folders the system
+    owns. On macOS a link into the sealed system volume is followed first:
+    ``/Applications/Safari.app`` is a link into ``/System``, and removing the
+    link would take the system application with it.
+    """
+    path = application.path
+    if path is None:
+        return None
+    key = application.source if application.source in _SYSTEM_APP_ROOTS else _platform_key(platform)
+    roots = _SYSTEM_APP_ROOTS[key]
+    if key == "linux":
+        return SYSTEM_PACKAGE if _under_any(path, roots) else None
+    if key == "macos":
+        return SYSTEM_APP if _under_any(_resolved(path), roots) else None
+    return SYSTEM_APP if _under_any(path, roots) else None
+
+
 def discover() -> Inventory:
     """Build the application inventory for this machine."""
     inventory = Inventory()
@@ -230,19 +314,39 @@ def discover() -> Inventory:
     except Exception as exc:
         inventory.errors.append(str(exc))
 
+    for application in inventory.applications:
+        reason = system_reason(application)
+        application.protected = reason is not None
+        application.reason = reason
+
     inventory.applications.sort(key=lambda app: -app.size)
     return inventory
 
 
-def uninstall(application: Application, *, dry_run: bool = False) -> tuple[bool, str]:
+def uninstall(
+    application: Application,
+    *,
+    dry_run: bool = False,
+    permanent: bool = False,
+) -> tuple[bool, str]:
     """Uninstall an application using the platform's own mechanism.
 
     Returns ``(ok, message)``. The inventory is expected to be re-read
-    afterwards — DiskBOX does the same after a real uninstall.
+    afterwards — DiskBOX does the same after a real uninstall. An application
+    of the operating system is refused: it is not the user's to remove.
     """
+    if application.protected:
+        return False, application.reason or SYSTEM_APP
+
     if application.source == "macos" and application.path is not None:
         if dry_run:
             return True, f"Would move {application.path} to the Trash."
+        if permanent:
+            try:
+                _remove(application.path)
+            except OSError as exc:
+                return False, str(exc)
+            return True, f"{application.name} deleted for good."
         try:
             from send2trash import send2trash
 
@@ -267,31 +371,33 @@ def uninstall(application: Application, *, dry_run: bool = False) -> tuple[bool,
             return False, str(exc)
         return True, f"Uninstaller for {application.name} finished."
 
-    if application.source == "linux" and application.uninstall_command:
+    if application.source == "linux" and application.path is not None:
+        # A desktop entry is not the program — the ``Exec`` line of one is
+        # the command that *starts* it. Removing the entry of an application
+        # the user installed is what "uninstalling" it means here.
         if dry_run:
-            return True, f"Would run: {application.uninstall_command}"
+            return True, f"Would remove {application.path}."
         try:
-            subprocess.run(
-                application.uninstall_command,
-                shell=True,
-                check=False,
-                capture_output=True,
-                timeout=300,
-            )
-        except (OSError, subprocess.SubprocessError) as exc:
+            application.path.unlink()
+        except OSError as exc:
             return False, str(exc)
-        return True, f"Uninstaller for {application.name} finished."
+        return True, f"{application.name} was removed from the application menu."
 
     if application.path is not None and application.path.exists():
         if dry_run:
             return True, f"Would remove {application.path}."
         try:
-            if application.path.is_dir():
-                shutil.rmtree(application.path)
-            else:
-                application.path.unlink()
+            _remove(application.path)
         except OSError as exc:
             return False, str(exc)
         return True, f"{application.name} removed."
 
     return False, "No uninstall mechanism is known for this application."
+
+
+def _remove(path: Path) -> None:
+    """Delete a file, a folder or a link."""
+    if path.is_symlink() or not path.is_dir():
+        path.unlink()
+    else:
+        shutil.rmtree(path)

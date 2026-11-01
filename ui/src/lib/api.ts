@@ -182,6 +182,18 @@ export const api = {
 
   apps: () => call<{ applications: Application[]; total_size: number }>('apps.list'),
 
+  /**
+   * Remove an application.
+   *
+   * The Trash keeps it recoverable — the space comes back when the Trash is
+   * emptied. `permanent` deletes it for good instead.
+   */
+  appsUninstall: (id: string, permanent = false) =>
+    call<{ ok: boolean; message: string; application: Application }>('apps.uninstall', {
+      id,
+      permanent,
+    }),
+
   monitor: () => call<MonitorSample>('monitor.sample', { processes: 10 }),
 
   snapshots: (ref: ScanRef) =>

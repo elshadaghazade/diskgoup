@@ -6,7 +6,7 @@ import typer
 from rich.table import Table
 
 from diskgoup.commands.common import console, emit, fail, is_json
-from diskgoup.core.applications import discover, uninstall
+from diskgoup.core.applications import SYSTEM_APP, discover, uninstall
 from diskgoup.util.humanize import human_bytes, human_count
 
 applications_app = typer.Typer(
@@ -40,8 +40,11 @@ def list_command(
     table.add_column("Path", style="dim", overflow="fold")
     applications = inventory.applications[:limit] if limit else inventory.applications
     for application in applications:
+        name = application.name
+        if application.protected:
+            name = f"{name} [dim](system)[/dim]"
         table.add_row(
-            application.name,
+            name,
             application.version or "—",
             human_bytes(application.size),
             str(application.path) if application.path else "—",
@@ -64,6 +67,10 @@ def uninstall_command(
         fail(f"no application named {name!r}")
 
     application = matches[0]
+    if application.protected:
+        # The application of the operating system is refused before the
+        # question is asked — there is nothing to confirm.
+        fail(application.reason or SYSTEM_APP)
     if not yes and not is_json() and not dry_run:
         console.print(f"About to uninstall [bold]{application.name}[/bold]")
         if application.uninstall_command:
