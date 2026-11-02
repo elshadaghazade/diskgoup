@@ -1,6 +1,9 @@
 # DiskGOup
 
-**Cross-platform disk space analyzer and duplicate file finder.**
+**Take Control of Your Disk Space. For Free.**
+
+Open-source disk analyzer and duplicate finder for macOS, Windows and Linux —
+desktop GUI and scriptable CLI.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/elshadaghazade/diskgoup?label=Release)](https://github.com/elshadaghazade/diskgoup/releases/latest)
@@ -24,6 +27,8 @@ drives the CLI as a child process.
 |---|---|
 | [Getting started](https://diskgoup.vercel.app/getting-started/quick-start/) | install the CLI or the desktop app and run your first scan |
 | [Downloads](https://diskgoup.vercel.app/getting-started/downloads/) | every build, for every platform, with checksums |
+| [Desktop app](https://diskgoup.vercel.app/desktop/overview/) | the window, its nine sections, the sidebar and focus mode |
+| [Explore](https://diskgoup.vercel.app/desktop/explore/) | the folder browser, the eight chart views, the inspector and safe-to-clean |
 | [Commands](https://diskgoup.vercel.app/reference/cli/) | the full CLI reference |
 | [Cleanup guide](https://diskgoup.vercel.app/guide/cleanup/) | how the staged, reviewed cleanup works |
 | [Development](https://diskgoup.vercel.app/development/building/) | how the CLI and the desktop app fit together, and how to release |
@@ -70,6 +75,69 @@ an open, scriptable CLI at the centre and the desktop app on top of it.
 
 ---
 
+## Desktop app
+
+The desktop app is a **thin front-end over the CLI**, not a second
+implementation. It starts `diskgoup serve` as a child process and asks it
+questions over JSON-RPC on stdin/stdout — so every number in the window was
+measured by the same Python code the command line uses. Delete the app and
+nothing is lost.
+
+![The DiskGOup desktop app](site/public/app/01-explore-folders.png)
+
+> The screenshots below were taken from a **sample disk**: a synthetic folder
+> tree, a made-up inventory of applications and a made-up game library. No
+> real file, application or game of yours is in them.
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<img src="site/public/app/02-explore-treemap.png" width="480" alt="The treemap view of a scan">
+<br><strong>Explore</strong> — the folder browser and eight chart views:
+treemap, sunburst, flame, bubbles, mind map, top sizes and age map.
+<br><a href="https://diskgoup.vercel.app/desktop/explore/">Explore →</a>
+</td>
+<td width="50%" valign="top">
+<img src="site/public/app/11-safe-to-clean.png" width="480" alt="The safe-to-clean scope listing the caches and logs of the scan">
+<br><strong>Safe to clean</strong> — the caches and logs the operating system
+regenerates, staged for review instead of deleted on the spot.
+<br><a href="https://diskgoup.vercel.app/guide/cleanup/">Cleanup guide →</a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<img src="site/public/app/15-duplicates.png" width="480" alt="The duplicates section listing identical files by hash">
+<br><strong>Duplicates</strong> — identical content, found by SHA-256 and an
+exact byte compare, with the extra copies grouped for review.
+<br><a href="https://diskgoup.vercel.app/desktop/duplicates/">Duplicates →</a>
+</td>
+<td width="50%" valign="top">
+<img src="site/public/app/12-search.png" width="480" alt="The search section with a name filter and result list">
+<br><strong>Search</strong> — by name, path, type, date and size, with all the
+conditions combined.
+<br><a href="https://diskgoup.vercel.app/desktop/search/">Search →</a>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<img src="site/public/app/13-archives.png" width="480" alt="The archives section listing the members of a zip archive">
+<br><strong>Archives</strong> — look inside a ZIP without extracting anything.
+<br><a href="https://diskgoup.vercel.app/desktop/archives/">Archives →</a>
+</td>
+<td width="50%" valign="top">
+<img src="site/public/app/20-reports.png" width="480" alt="The reports section with the weekly HTML report and the CSV export">
+<br><strong>Reports</strong> — a weekly HTML report and a file-type CSV.
+<br><a href="https://diskgoup.vercel.app/desktop/reports/">Reports →</a>
+</td>
+</tr>
+</table>
+
+The remaining sections — **Applications**, **Games**, **Monitor** and
+**Snapshots** — are documented on
+[the desktop app page](https://diskgoup.vercel.app/desktop/overview/).
+
+---
+
 ## Downloads
 
 Every release ships a standalone CLI binary and a desktop app, built by the
@@ -86,10 +154,32 @@ The links always point at the newest release. The CLI binary is
 self-contained — no Python needed on the machine you run it on. The
 desktop app bundles the same binary.
 
-The macOS and Windows installers are **unsigned**, so Gatekeeper and
-SmartScreen warn on first launch.
-
 The full list is on the [downloads page](https://diskgoup.vercel.app/getting-started/downloads/).
+
+### Unsigned installers
+
+The macOS `.dmg` and the Windows `.exe` are **not code-signed and not
+notarized** — the project publishes no certificate — so **Gatekeeper and
+SmartScreen warn on the first launch.** The Linux AppImage is unaffected.
+
+That warning is the operating system asking, not the app failing. Whether to
+allow an unsigned build on your own machine is your decision, and your
+responsibility.
+
+| Platform | What you see | What to do |
+|---|---|---|
+| macOS | "cannot be opened because the developer cannot be verified" | right-click the app in the mounted `.dmg` → **Open** → **Open**, or **System Settings → Privacy & Security → Open Anyway** |
+| Windows | "Windows protected your PC" | **More info** → **Run anyway** |
+
+If you would rather not allow an unsigned binary at all, two other roads lead
+to the same program:
+
+- **Verify the download.** Every release ships the SHA-256 of each file in
+  `checksums-cli.txt` and `checksums-desktop.txt` —
+  `sha256sum --check checksums-desktop.txt`.
+- **Build it from source** — see [Build for production](#build-for-production)
+  below, or
+  [the building guide](https://diskgoup.vercel.app/development/building/).
 
 ---
 
