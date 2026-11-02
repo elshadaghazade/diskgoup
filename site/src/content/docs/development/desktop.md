@@ -7,6 +7,9 @@ The desktop app is a thin front-end. It owns **no disk logic** — every
 number it shows was computed by the Python CLI, which it runs as a child
 process.
 
+This page is about how it is built. What it does for the user is in
+[The desktop app](/desktop/overview/).
+
 ```
 ┌─────────────────────────────────────────────┐
 │ Electron main process                       │
