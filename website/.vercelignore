@@ -1,0 +1,7 @@
+# The build output and the dependencies are made on Vercel, never uploaded.
+node_modules
+.next
+
+# The environment file holds a token for another project — it stays local.
+.env*
+.vercel
