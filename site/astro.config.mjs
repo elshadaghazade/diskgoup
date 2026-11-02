@@ -50,6 +50,21 @@ export default defineConfig({
 					],
 				},
 				{
+					label: 'Desktop app',
+					items: [
+						{ label: 'The desktop app', slug: 'desktop/overview' },
+						{ label: 'Explore', slug: 'desktop/explore' },
+						{ label: 'Search', slug: 'desktop/search' },
+						{ label: 'Archives', slug: 'desktop/archives' },
+						{ label: 'Duplicates', slug: 'desktop/duplicates' },
+						{ label: 'Applications', slug: 'desktop/applications' },
+						{ label: 'Games', slug: 'desktop/games' },
+						{ label: 'Monitor', slug: 'desktop/monitor' },
+						{ label: 'Snapshots', slug: 'desktop/snapshots' },
+						{ label: 'Reports', slug: 'desktop/reports' },
+					],
+				},
+				{
 					label: 'Reference',
 					items: [
 						{ label: 'CLI reference', slug: 'reference/cli' },

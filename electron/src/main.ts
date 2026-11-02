@@ -72,6 +72,9 @@ async function createWindow(): Promise<void> {
     minHeight: 640,
     title: 'DiskGOup',
     backgroundColor: '#0d1117',
+    // The window icon. On macOS the dock shows the bundle icon (build/icon.icns);
+    // on Windows and Linux this is the icon of the running window.
+    icon: join(__dirname, '..', 'assets', 'icon.png'),
     show: false,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
@@ -108,6 +111,12 @@ async function createWindow(): Promise<void> {
 
 async function bootstrap(): Promise<void> {
   registerIpc()
+
+  // The dock icon of a packaged app comes from the bundle (build/icon.icns).
+  // In development there is no bundle, so the dock gets the same artwork.
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setIcon(join(__dirname, '..', 'assets', 'icon.png'))
+  }
 
   // The CLI binary must exist before the app can do anything useful. Say so
   // plainly instead of showing an empty window.

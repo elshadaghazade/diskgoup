@@ -96,8 +96,14 @@ pages after what they are: `reference/scan-index.md`.
 |---|---|
 | **Getting started** | Installation · Quick start · Where things are stored |
 | **Guides** | Scanning · Explore views · Searching · Finding duplicates · Cleaning up safely · Archives · Applications · Games · Live monitor · Snapshots · Reports |
+| **Desktop app** | The desktop app · Explore · Search · Archives · Duplicates · Applications · Games · Monitor · Snapshots · Reports |
 | **Reference** | CLI reference · JSON-RPC protocol · File kinds · Protection rules · The scan index · Environment variables |
 | **Development** | Architecture · The desktop app · Building and releasing · Contributing |
+
+The pages under **Desktop app** describe the Electron app and carry
+screenshots of it. The screenshots are taken from a sample disk — a synthetic
+folder tree and a made-up inventory — so no real file of yours is in them.
+The images live in `public/app/` and are referenced as `/app/<name>.png`.
 
 ## What the site documents
 

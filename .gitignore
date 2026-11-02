@@ -10,7 +10,9 @@ __pycache__/
 htmlcov/
 
 # PyInstaller
-build/
+# Anchored: only the top-level PyInstaller work directory. electron/build/
+# holds the application icon and must be committed.
+/build/
 dist/
 *.spec.bak
 
