@@ -1300,6 +1300,9 @@ table.data td.path {
 }
 
 .bar-list .fill {
+  /* The fill is a span inside the track. Without this it stays inline, and
+     an inline box ignores width and height — the bar drew as a flat line. */
+  display: block;
   height: 100%;
   border-radius: 4px;
 }

@@ -1,0 +1,95 @@
+/* The website's own tweaks to the embedded demo.
+ *
+ * `demo.css` is generated from the desktop app's stylesheet, so it is not
+ * edited here. These are the rules the app needs *only* when it lives inside
+ * a page instead of owning a window.
+ */
+
+/* The app is a window on its own: it fills the screen and its modals cover
+   the screen. Here it lives in a box on a page, so it fills the box and its
+   modals stay inside it.
+
+   The container also makes the app's own media queries work again — they
+   measure the viewport, but the box the app lives in is far narrower. */
+.dg-app {
+  position: relative;
+  container-type: inline-size;
+}
+
+.dg-app .app {
+  min-height: 0;
+}
+
+.dg-app .modal-backdrop {
+  position: absolute;
+}
+
+/* The eight views are a row of buttons; when there is no room for the row,
+   it wraps instead of disappearing behind the edge. */
+.dg-app .view-switcher {
+  flex-wrap: wrap;
+}
+
+/* The breadcrumb and the buttons of the folder bar share one line. On a
+   narrow box the buttons wrap to a second line rather than being cut off. */
+.dg-app .browser-bar {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.dg-app .browser-bar .breadcrumb {
+  flex: 1 1 auto;
+}
+
+.dg-app .view-actions {
+  flex: 0 0 auto;
+}
+
+/* The app window on screen is 1280 wide; the box on the page is narrower, so
+   the side panels give some of their room back to the working area — enough
+   for the row of view buttons to stay on one line. */
+@container (max-width: 1250px) {
+  .dg-app .app-body {
+    grid-template-columns: 215px minmax(0, 1fr) 265px;
+  }
+}
+
+/* A narrow box: the side panels come first to go, so the working area keeps
+   its room. */
+@container (max-width: 900px) {
+  .dg-app .app-body {
+    grid-template-columns: 200px minmax(0, 1fr) 240px;
+  }
+}
+
+@container (max-width: 700px) {
+  .dg-app .app-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dg-app .app-body > .sidebar,
+  .dg-app .app-body > .inspector {
+    display: none;
+  }
+
+  /* There is no room for the brand, the tabs, the filter field and the focus
+     button on one line. The filter field drops to a line of its own rather
+     than squeezing the tabs until "Duplicates" is cut in half. */
+  .dg-app .app-topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 12px;
+    row-gap: 8px;
+  }
+
+  .dg-app .topbar-spacer {
+    display: none;
+  }
+
+  .dg-app .search-field {
+    order: 3;
+    flex: 1 1 100%;
+    min-width: 0;
+    width: auto;
+  }
+}
