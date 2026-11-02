@@ -21,10 +21,10 @@ export default function Archives({ archives }: Props) {
   // Open the biggest archive first — the one the reader is most likely to
   // want to look at.
   useEffect(() => {
-    if (!selected && archives.length) setSelected(archives[0].path)
+    if (!selected && archives?.length) setSelected(archives[0].path)
   }, [archives, selected])
 
-  const current = archives.find((archive) => archive.path === selected) ?? null
+  const current = archives?.find?.((archive) => archive.path === selected) ?? null
 
   return (
     <>
@@ -35,8 +35,8 @@ export default function Archives({ archives }: Props) {
 
       <div className="workspace-content">
         <div className="panel">
-          <h3>Archives found ({count(archives.length)})</h3>
-          {archives.length === 0 ? (
+          <h3>Archives found ({count(archives?.length ?? 0)})</h3>
+          {archives?.length === 0 ? (
             <div style={{ color: 'var(--dim)', fontSize: 13 }}>
               No ZIP archives were found in this scan.
             </div>
@@ -49,7 +49,7 @@ export default function Archives({ archives }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {archives.map((archive) => (
+                {archives?.map((archive) => (
                   <tr
                     key={archive.path}
                     onClick={() => {

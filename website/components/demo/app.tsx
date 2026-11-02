@@ -234,8 +234,8 @@ export default function DemoApp({ data }: { data: DemoData }) {
       case 'applications':
         return (
           <Applications
-            applications={data.applications.applications}
-            total={data.applications.total_size}
+            applications={data.applications?.applications ?? []}
+            total={data.applications?.total_size ?? 0}
           />
         )
       case 'games':
