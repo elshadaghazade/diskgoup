@@ -141,19 +141,81 @@ DiskGOup deletes files. That makes some rules non-negotiable:
 
 ## Reporting a bug
 
-Open an issue with:
+Open an issue with the **Bug report** template — the repository has one, so
+you get the right fields instead of a blank page.
 
-- your OS and Python version;
+Fill in what the template asks for:
+
+- your operating system and version;
 - the exact command (or a screenshot of the app);
 - what you expected and what happened;
 - the output of `uv run diskgoup --version`.
 
 A bug report that includes the command line and the output is usually fixed
-in a day.
+in a day. The template asks for the version because most surprises come from
+a change between releases.
+
+The issue gets the `bug` label automatically, and `needs-triage` until
+somebody has looked at it.
+
+## Suggesting a feature
+
+Ideas are **discussed first, implemented second**. Open a
+[discussion](https://github.com/elshadaghazade/diskgoup/discussions) and say
+what you are trying to do. A discussion is cheap — if the idea turns out to
+be already possible, you have learned that in a day instead of a week.
+
+When the idea has a shape, open a **Feature request** issue. It gets the
+`enhancement` and `needs-discussion` labels, and it is where the work is
+planned.
+
+A feature request that answers these is easy to act on:
+
+1. **The problem** — what you are trying to do that is hard today. Not the
+   solution; the problem.
+2. **The proposal** — what DiskGOup should do about it.
+3. **The alternatives** — what you tried, and what other tools do.
+
+## How the work is organised
+
+Issues carry labels, and the labels are what the board is built from.
+
+| Label | Meaning |
+|---|---|
+| `bug` | something does not work |
+| `enhancement` | a new capability, or an improvement |
+| `needs-triage` | nobody has looked at it yet |
+| `confirmed` | reproduced — it is real |
+| `needs-discussion` | the idea has to be discussed before it becomes work |
+| `area: cli` | the change belongs in `src/diskgoup/` |
+| `area: desktop` | the change belongs in the Electron app or the renderer |
+| `area: docs` | the change belongs in this site |
+| `area: build/ci` | the change belongs in the workflows or the packaging |
+| `platform: macos`, `platform: linux`, `platform: windows` | where it was seen |
+| `good first issue` | small, self-contained and a good way in |
+| `help wanted` | nobody is working on it — yours to take |
+
+Issues are grouped into **milestones**, which are the releases: `v0.2.0` holds
+everything that is going into the next version.
+
+The **project board** is a Kanban board — *Backlog → Planned → In progress →
+In review → Done* — and it is a view over the issues, not a second place to
+write things down. Moving a card means moving the issue's status.
+
+To pick something up: comment on the issue, so nobody duplicates the work,
+and move it to *In progress*.
+
+## The releases
+
+**Merging into `main` is what publishes a release.** The CLI and the desktop
+app are built for every platform and attached to the
+[release](https://github.com/elshadaghazade/diskgoup/releases) — no commands to
+run, no tag to push. The steps are in
+[Building and releasing](/development/building/).
 
 ## The documentation
 
-This site is a separate repository from the application. It documents the
+This site lives in the application repository, under `site/`. It documents the
 **shipped** behaviour — if a module is marked "(planned)" in the project's
 own notes but is in fact implemented, the site describes what the code
 does.

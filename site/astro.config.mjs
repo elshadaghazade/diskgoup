@@ -34,6 +34,7 @@ export default defineConfig({
 					label: 'Getting started',
 					items: [
 						{ label: 'Installation', slug: 'getting-started/installation' },
+						{ label: 'Downloads', slug: 'getting-started/downloads' },
 						{ label: 'Quick start', slug: 'getting-started/quick-start' },
 						{ label: 'Where things are stored', slug: 'getting-started/paths' },
 					],

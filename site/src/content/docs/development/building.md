@@ -15,8 +15,8 @@ description: How to set up the development environment, run the tests, and build
 ## Setting up
 
 ```bash
-git clone https://github.com/elshadaghazade/diskgoup-alternative
-cd diskgoup-alternative
+git clone https://github.com/elshadaghazade/diskgoup
+cd diskgoup
 uv sync
 ```
 
@@ -178,10 +178,58 @@ The macOS build is configured with `identity: "-"`, `hardenedRuntime: false`
 and `gatekeeperAssess: false` — it is not signed or notarized, so Gatekeeper
 will complain on another machine. Sign it before shipping to anyone else.
 
+## Releasing
+
+**Merging into `main` is the release.** There is no command to run and no tag
+to push — the workflow does it.
+
+| Workflow | When it runs | What it does |
+|---|---|---|
+| [`ci.yml`](https://github.com/elshadaghazade/diskgoup/blob/main/.github/workflows/ci.yml) | on every pull request and on `main` | the CLI's tests and types, the desktop app's types, the documentation build |
+| [`release.yml`](https://github.com/elshadaghazade/diskgoup/blob/main/.github/workflows/release.yml) | on every merge into `main` | works out the version, writes it into the project, tags it and starts the two builds below |
+| [`release-cli.yml`](https://github.com/elshadaghazade/diskgoup/blob/main/.github/workflows/release-cli.yml) | started by `release.yml` | the CLI binary for macOS (arm64 + x64), Linux (x64 + arm64) and Windows (x64) |
+| [`release-desktop.yml`](https://github.com/elshadaghazade/diskgoup/blob/main/.github/workflows/release-desktop.yml) | started by `release.yml` | the desktop app: a `.dmg` for macOS, an `.exe` for Windows, an `.AppImage` for Linux |
+
+The steps, in short:
+
+1. **The version.** The first release publishes the version in
+   `pyproject.toml`. After that the bump follows what was merged: a `feat:`
+   commit means a minor release, a breaking change a major one, anything else a
+   patch. `scripts/next-version.py` is where that rule lives.
+2. **The tag is the version** — `scripts/set-version.py` writes it into the
+   Python package and both `package.json` files, so the artifact and the tag
+   always agree. The version is committed to `main` and tagged `v0.2.0`.
+3. **The builds.** The CLI is built with `uv run pyinstaller diskgoup.spec` and
+   smoke-tested with `diskgoup --version`; the desktop app is packaged with
+   `electron-builder`, with the CLI binary bundled into it.
+4. **The files** are uploaded to the release under fixed names — the
+   documentation links to them with `releases/latest/download/<name>`, so
+   those links never break.
+5. **The documentation** follows: `site/scripts/update-downloads.py` updates
+   the version on the [downloads page](/getting-started/downloads/) and opens a
+   pull request with the change. Merging that pull request does not start
+   another release.
+
+Two ways to cut a release by hand, if you want one:
+
+```bash
+# a version of your own choosing — Actions → Cut a release → Run workflow
+gh workflow run release.yml -f version=0.3.0
+
+# or a tag, which builds exactly the same thing
+git tag -a v0.3.0 -m "DiskGOup 0.3.0"
+git push origin v0.3.0
+```
+
+:::caution
+The macOS and Windows installers are **unsigned**. Gatekeeper and SmartScreen
+will warn on a machine that has never seen them.
+:::
+
 ## The repository layout
 
 ```
-diskgoup-alternative/
+diskgoup/
 ├── src/diskgoup/          the Python package
 │   ├── cli.py             the Typer app
 │   ├── commands/          one module per CLI area

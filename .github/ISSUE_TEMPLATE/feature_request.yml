@@ -1,0 +1,48 @@
+name: Feature request
+description: Suggest a new capability or an improvement.
+title: "[Feature]: "
+labels: ["enhancement", "needs-discussion"]
+body:
+  - type: markdown
+    value: |
+      Ideas are discussed first, implemented second.
+
+      If you have not opened a
+      [discussion](https://github.com/elshadaghazade/diskgoup/discussions) yet,
+      that is a good place to start — it is cheap, and the answer may be that
+      the thing already exists.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of DiskGOup?
+      options:
+        - Scanning and the index
+        - Explore views
+        - Search and duplicates
+        - Cleanup
+        - The desktop app
+        - The command line
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do that is hard today?
+      description: The problem, not the solution. This is the most important part.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like DiskGOup to do about it?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What else did you try?
+      description: Other tools, other commands, a workaround you wrote.

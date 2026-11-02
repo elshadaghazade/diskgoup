@@ -66,6 +66,7 @@ src/
 astro.config.mjs          # Starlight config: title, logo, sidebar, social links
 public/                   # static assets (favicon, images)
 scripts/make-logo.py      # draws the logo from the app icon's geometry
+scripts/update-downloads.py  # points the downloads page at a new release
 ```
 
 ## The logo

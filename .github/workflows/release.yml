@@ -1,0 +1,138 @@
+name: Cut a release
+
+# Every merge into main is a release.
+#
+# This workflow works out the version, writes it into the project, commits and
+# tags it, and then starts the two build workflows — the CLI and the desktop
+# app — which attach their files to the release of that tag. Nothing has to be
+# done by hand: merging a pull request is enough.
+
+on:
+  push:
+    branches:
+      - main
+    # A release opens a pull request with the updated downloads page. Merging
+    # that page back must not start another release, so a push that touches
+    # nothing else is ignored here.
+    paths-ignore:
+      - 'site/src/content/docs/getting-started/downloads.md'
+  # A release can also be cut by hand, with a version of your choosing.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The version to release, for example 0.3.0. Leave it empty to work it out.'
+        required: false
+        type: string
+
+permissions:
+  # `actions: write` is what lets this workflow start the two build workflows.
+  actions: write
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Work out the version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+
+      - name: Skip the version commit
+        id: guard
+        run: |
+          subject="$(git log -1 --format=%s)"
+          if [[ "$subject" == "chore(release):"* ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "This push is the version commit of a release — there is nothing new to release."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Choose the version
+        id: version
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          version="${{ inputs.version }}"
+          if [ -z "$version" ]; then
+            version="$(python3 scripts/next-version.py)"
+          else
+            version="$(python3 scripts/next-version.py "$version")"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "→ releasing $version"
+
+  cut:
+    name: Tag the release
+    needs: prepare
+    if: needs.prepare.outputs.version != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+
+      - name: Write the version into the project
+        run: python3 scripts/set-version.py "${{ needs.prepare.outputs.version }}"
+
+      - name: Commit the version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          if git diff --cached --quiet; then
+            echo "the version is already ${{ needs.prepare.outputs.version }} — nothing to commit"
+          else
+            git commit -m "chore(release): ${{ needs.prepare.outputs.tag }}"
+            if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+              echo "::warning::not on main — the version stays in this release only"
+            else
+              for attempt in 1 2 3; do
+                if git push origin HEAD:main; then
+                  break
+                fi
+                echo "::warning::the push failed, rebasing and trying again"
+                git pull --rebase origin main
+              done
+            fi
+          fi
+
+      - name: Tag it
+        run: |
+          git tag -a "${{ needs.prepare.outputs.tag }}" -m "DiskGOup ${{ needs.prepare.outputs.tag }}"
+          git push origin "${{ needs.prepare.outputs.tag }}"
+
+  build:
+    name: Start the builds
+    needs: [prepare, cut]
+    if: needs.prepare.outputs.version != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the CLI and the desktop app
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run release-cli.yml \
+            --ref "${{ needs.prepare.outputs.tag }}" \
+            -f version="${{ needs.prepare.outputs.version }}"
+          gh workflow run release-desktop.yml \
+            --ref "${{ needs.prepare.outputs.tag }}" \
+            -f version="${{ needs.prepare.outputs.version }}"

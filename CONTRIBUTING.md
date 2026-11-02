@@ -156,19 +156,94 @@ DiskGOup deletes files. That makes some rules non-negotiable:
 
 ## 7. Reporting a bug
 
-Open an issue with:
+Open an issue with the **Bug report** template — the repository has one, so
+you get the right fields instead of a blank page.
 
-- your OS and Python version;
+Fill in what the template asks for:
+
+- your operating system and version;
 - the exact command (or the screenshot of the app);
 - what you expected and what happened;
 - the output of `uv run diskgoup --version`.
 
 A bug report that includes the command line and the output is usually fixed in
-a day.
+a day. The template asks for the version because most surprises come from a
+change between releases.
+
+The issue gets the `bug` label automatically, and `needs-triage` until
+somebody has looked at it.
+
+## 8. Suggesting a feature
+
+Ideas are **discussed first, implemented second**. Open a
+[discussion](https://github.com/elshadaghazade/diskgoup/discussions) and say
+what you are trying to do. A discussion is cheap — if the idea turns out to
+be already possible, you have learned that in a day instead of a week.
+
+When the idea has a shape, open a **Feature request** issue. It gets the
+`enhancement` and `needs-discussion` labels, and it is where the work is
+planned.
+
+A feature request that answers these is easy to act on:
+
+1. **The problem** — what you are trying to do that is hard today. Not the
+   solution; the problem.
+2. **The proposal** — what DiskGOup should do about it.
+3. **The alternatives** — what you tried, and what other tools do.
+
+## 9. How the work is organised
+
+Issues carry labels, and the labels are what the board is built from.
+
+| Label | Meaning |
+|---|---|
+| `bug` | something does not work |
+| `enhancement` | a new capability, or an improvement |
+| `needs-triage` | nobody has looked at it yet |
+| `confirmed` | reproduced — it is real |
+| `needs-discussion` | the idea has to be discussed before it becomes work |
+| `area: cli` | the change belongs in `src/diskgoup/` |
+| `area: desktop` | the change belongs in the Electron app or the renderer |
+| `area: docs` | the change belongs in the documentation site |
+| `area: build/ci` | the change belongs in the workflows or the packaging |
+| `platform: macos`, `platform: linux`, `platform: windows` | where it was seen |
+| `good first issue` | small, self-contained and a good way in |
+| `help wanted` | nobody is working on it — yours to take |
+
+Issues are grouped into **milestones**, which are the releases: `v0.2.0` holds
+everything that is going into the next version.
+
+The **project board** is a Kanban board — *Backlog → Planned → In progress →
+In review → Done* — and it is a view over the issues, not a second place to
+write things down. Moving a card means moving the issue's status.
+
+To pick something up: comment on the issue, so nobody duplicates the work,
+and move it to *In progress*.
+
+## 10. The releases
+
+**Merging into `main` is what publishes a release.** The workflow works out the
+version, tags it, and builds the CLI and the desktop app for every platform;
+the files are attached to the
+[release](https://github.com/elshadaghazade/diskgoup/releases).
+
+The version follows what was merged:
+
+| What was merged | The release |
+|---|---|
+| the first release | the version in `pyproject.toml` |
+| a `feat:` commit | a minor release — `0.2.0` → `0.3.0` |
+| a breaking change | a major release |
+| anything else | a patch release — `0.2.0` → `0.2.1` |
+
+Nothing has to be done by hand. To cut a release with a version of your own
+choosing, run the *Cut a release* workflow from the Actions tab; to see how it
+works, read
+[Building and releasing](site/src/content/docs/development/building.md).
 
 ---
 
-## 8. License
+## 11. License
 
 DiskGOup is MIT licensed — see [LICENSE](LICENSE). By contributing you agree that
 your contribution is published under the same license.

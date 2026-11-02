@@ -1,0 +1,144 @@
+name: Release desktop app
+
+# The Electron app is packaged for every platform and attached to the GitHub
+# Release of the pushed tag — the same release the CLI workflow fills.
+#
+# The CLI binary is built here too: the app bundles it, so an installer
+# without it would not start.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # The release workflow starts this one, so that a merge into main is
+  # enough to publish the installers. The version can also be given by hand.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The version to build, for example 0.2.0. Leave it empty to take it from the tag.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple silicon)
+            id: macos-arm64
+            os: macos-15
+            builder: --mac --arm64
+            match: electron/release/DiskGOup-*-arm64.dmg
+            asset: DiskGOup-macOS-arm64.dmg
+          - name: macOS (Intel)
+            id: macos-x64
+            os: macos-15-intel
+            builder: --mac --x64
+            match: electron/release/DiskGOup-*-x64.dmg
+            asset: DiskGOup-macOS-x64.dmg
+          - name: Windows (x64)
+            id: windows-x64
+            os: windows-2022
+            builder: --win --x64
+            match: 'electron/release/DiskGOup Setup *.exe'
+            asset: DiskGOup-Windows-x64.exe
+          - name: Linux (x64)
+            id: linux-x64
+            os: ubuntu-24.04
+            builder: --linux AppImage --x64
+            match: electron/release/DiskGOup-*-x86_64.AppImage
+            asset: DiskGOup-Linux-x64.AppImage
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            ui/package-lock.json
+            electron/package-lock.json
+
+      - name: Install the dependencies
+        run: |
+          uv sync
+          npm --prefix ui ci
+          npm --prefix electron ci
+
+      - name: The release we are building
+        run: |
+          version="${{ inputs.version || github.ref_name }}"
+          echo "RELEASE_VERSION=${version#v}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=v${version#v}" >> "$GITHUB_ENV"
+
+      - name: Take the version from the tag
+        run: python scripts/set-version.py "$RELEASE_VERSION"
+
+      - name: Build the renderer
+        run: npm --prefix ui run build
+
+      - name: Build the Electron app
+        run: |
+          npm --prefix electron run build:electron
+          npm --prefix electron run build:cli
+          npm --prefix electron run build:assets
+
+      - name: Package the installer
+        working-directory: electron
+        run: npx electron-builder ${{ matrix.builder }}
+
+      - name: Give the installer its release name
+        run: python scripts/pick-artifact.py "${{ matrix.match }}" "${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.id }}
+          path: release-assets/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: The release we are publishing
+        run: |
+          version="${{ inputs.version || github.ref_name }}"
+          echo "RELEASE_VERSION=${version#v}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=v${version#v}" >> "$GITHUB_ENV"
+
+      - name: Checksums
+        run: |
+          cd artifacts
+          sha256sum * > checksums-desktop.txt
+          cat checksums-desktop.txt
+
+      - name: Attach the files to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/publish-release.sh "$RELEASE_TAG" artifacts

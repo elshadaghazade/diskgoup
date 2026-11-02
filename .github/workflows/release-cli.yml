@@ -1,0 +1,162 @@
+name: Release CLI
+
+# The CLI is built for every platform and attached to the GitHub Release of
+# the pushed tag. The desktop app has its own workflow; both add their
+# files to the same release.
+#
+# The tag is the version: pushing `v0.2.0` builds the CLI as 0.2.0.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # The release workflow starts this one, so that a merge into main is
+  # enough to publish the binaries. The version can also be given by hand.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The version to build, for example 0.2.0. Leave it empty to take it from the tag.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  # The documentation step opens a pull request with the updated downloads page.
+  pull-requests: write
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple silicon)
+            id: macos-arm64
+            os: macos-15
+            asset: diskgoup-cli-macos-arm64.tar.gz
+            archive: tar
+          - name: macOS (Intel)
+            id: macos-x64
+            os: macos-15-intel
+            asset: diskgoup-cli-macos-x64.tar.gz
+            archive: tar
+          - name: Linux (x64)
+            id: linux-x64
+            os: ubuntu-24.04
+            asset: diskgoup-cli-linux-x64.tar.gz
+            archive: tar
+          - name: Linux (arm64)
+            id: linux-arm64
+            os: ubuntu-24.04-arm
+            asset: diskgoup-cli-linux-arm64.tar.gz
+            archive: tar
+          - name: Windows (x64)
+            id: windows-x64
+            os: windows-2022
+            asset: diskgoup-cli-windows-x64.zip
+            archive: zip
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+
+      - name: The release we are building
+        run: |
+          version="${{ inputs.version || github.ref_name }}"
+          echo "RELEASE_VERSION=${version#v}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=v${version#v}" >> "$GITHUB_ENV"
+
+      - name: Take the version from the tag
+        run: python scripts/set-version.py "$RELEASE_VERSION"
+
+      - name: Install the project
+        run: uv sync
+
+      - name: Build the binary
+        run: uv run pyinstaller diskgoup.spec
+
+      - name: Check that the binary runs
+        run: |
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            ./dist/diskgoup.exe --version
+          else
+            ./dist/diskgoup --version
+          fi
+
+      - name: Package
+        run: |
+          mkdir -p release-assets
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            (cd dist && python -m zipfile -c "../release-assets/${{ matrix.asset }}" diskgoup.exe)
+          else
+            tar -czf "release-assets/${{ matrix.asset }}" -C dist diskgoup
+          fi
+          ls -l release-assets
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-${{ matrix.id }}
+          path: release-assets/${{ matrix.asset }}
+          if-no-files-found: error
+
+  release:
+    name: Publish the release
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: The release we are publishing
+        run: |
+          version="${{ inputs.version || github.ref_name }}"
+          echo "RELEASE_VERSION=${version#v}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=v${version#v}" >> "$GITHUB_ENV"
+
+      - name: Checksums
+        run: |
+          cd artifacts
+          sha256sum * > checksums-cli.txt
+          cat checksums-cli.txt
+
+      - name: Attach the files to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: scripts/publish-release.sh "$RELEASE_TAG" artifacts
+
+      - name: Point the documentation at the new release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 site/scripts/update-downloads.py --version "$RELEASE_VERSION"
+          if git diff --quiet -- site/src/content/docs/getting-started/downloads.md; then
+            echo "the documentation already points at this release"
+            exit 0
+          fi
+          branch="docs/release-${RELEASE_TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add site/src/content/docs/getting-started/downloads.md
+          git commit -m "docs(site): point the download links at ${RELEASE_TAG}"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" \
+            --title "docs(site): point the download links at ${RELEASE_TAG}" \
+            --body "The release ${RELEASE_TAG} is out. This updates the version and the release-notes link on the downloads page."

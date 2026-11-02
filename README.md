@@ -2,6 +2,10 @@
 
 **Cross-platform disk space analyzer and duplicate file finder.**
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/elshadaghazade/diskgoup?label=Release)](https://github.com/elshadaghazade/diskgoup/releases/latest)
+[![Platforms](https://img.shields.io/badge/macOS%20%7C%20Linux%20%7C%20Windows-4479a1.svg)](#downloads)
+
 DiskGOup shows you exactly where your disk space went — by folder, by file type,
 by age, and by content duplication — and gives you a staged, reviewed cleanup flow
 instead of a one-click "delete my stuff".
@@ -48,6 +52,29 @@ an open, scriptable CLI at the centre and the desktop app on top of it.
 | Electron + Vite desktop app | ✅ working — spawns the CLI, renders all nine sections |
 | Desktop scan list | ✅ working — every stored scan is listed and can be opened or deleted |
 | Factory reset | ✅ working — `diskgoup reset` / **⟲ Reset app** rebuilds the index from scratch |
+
+---
+
+## Downloads
+
+Every release ships a standalone CLI binary and a desktop app, built by the
+project's own CI and attached to the
+[GitHub release](https://github.com/elshadaghazade/diskgoup/releases) of the
+tag.
+
+| | macOS | Linux | Windows |
+|---|---|---|---|
+| **CLI** | [arm64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/diskgoup-cli-macos-arm64.tar.gz) · [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/diskgoup-cli-macos-x64.tar.gz) | [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/diskgoup-cli-linux-x64.tar.gz) · [arm64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/diskgoup-cli-linux-arm64.tar.gz) | [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/diskgoup-cli-windows-x64.zip) |
+| **Desktop app** | [arm64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-arm64.dmg) · [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-x64.dmg) | [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Linux-x64.AppImage) | [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Windows-x64.exe) |
+
+The links always point at the newest release. The CLI binary is
+self-contained — no Python needed on the machine you run it on. The
+desktop app bundles the same binary.
+
+The macOS and Windows installers are **unsigned**, so Gatekeeper and
+SmartScreen warn on first launch.
+
+The full list is on the [downloads page](https://diskgoup.vercel.app/getting-started/downloads/).
 
 ---
 
@@ -184,11 +211,12 @@ that runs anywhere, with no Python installation required.
 ## How it works
 
 ```
-diskgoup-alternative/
+diskgoup/
 ├── src/diskgoup/     Python CLI (uv project) — all the disk logic
 ├── electron/         Electron main process (TypeScript)
 ├── ui/               Vite + React renderer (TypeScript)
-└── site/             Astro + Starlight documentation site
+├── site/             Astro + Starlight documentation site
+└── scripts/          release helpers — version, artifact names, publishing
 ```
 
 The renderer contains **no disk logic**. The Electron main process spawns the

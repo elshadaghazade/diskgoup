@@ -1,6 +1,16 @@
 {
   "name": "diskgoup-ui",
   "private": true,
+  "author": {
+    "name": "Elshad Aghayev",
+    "url": "https://github.com/elshadaghazade"
+  },
+  "license": "MIT",
+  "homepage": "https://diskgoup.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elshadaghazade/diskgoup.git"
+  },
   "version": "0.1.0",
   "type": "module",
   "description": "DiskGOup desktop UI — a thin front-end over the DiskGOup CLI.",

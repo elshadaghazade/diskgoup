@@ -131,7 +131,7 @@ async function bootstrap(): Promise<void> {
       detail: backend.missingBinaryMessage(),
     })
     if (choice.response === 0) {
-      await shell.openExternal('https://github.com/elshadaghazade/diskgoup-alternative#development')
+      await shell.openExternal('https://github.com/elshadaghazade/diskgoup#development')
     }
     app.quit()
     return

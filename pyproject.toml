@@ -32,8 +32,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/elshadaghazade/diskgoup-alternative"
-Repository = "https://github.com/elshadaghazade/diskgoup-alternative"
+Homepage = "https://github.com/elshadaghazade/diskgoup"
+Repository = "https://github.com/elshadaghazade/diskgoup"
 
 [project.scripts]
 diskgoup = "diskgoup.cli:run"
