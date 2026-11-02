@@ -87,8 +87,8 @@ Measured game size is not reclaimable space. Saves and game files are protected.
 
 External save locations and mod-manager directories cannot be inferred from
 the installation — the launcher does not record where they point. They have to
-be associated explicitly. This is the same limitation the original DiskBOX
-has.
+be associated explicitly. This is a limitation of the launchers themselves, not
+of the scan: no analyser can guess a path the launcher never wrote down.
 
 ## JSON output
 

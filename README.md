@@ -13,9 +13,15 @@ drives the CLI as a child process.
 
 ## Why this exists
 
-[DiskBOX](https://www.diskbox.app/) does a good job of this, but it is
-Windows-only and closed-source. This project reimplements the same capabilities
-for **macOS, Linux and Windows**, with an open, scriptable CLI at the centre.
+Disk-space analysers are a mature — mostly paid — market. The commercial tools
+in this space do a good job, but they are closed-source, each one targets a
+single platform, and every one of them is GUI-only: you cannot script them,
+and the tool you use on your laptop is rarely the tool you use on your
+desktop.
+
+DiskGOup does the same job those paid tools do, and does it **open-source and
+cross-platform** — the same capabilities on **macOS, Linux and Windows**, with
+an open, scriptable CLI at the centre and the desktop app on top of it.
 
 ---
 
@@ -225,9 +231,10 @@ goes into `src/diskgoup/` and the GUI only presents it.
 - **[goup.vc](https://goup.vc/)** — the DiskGOup community. This project is
   built with and for the people there: ideas, bug reports, design opinions and
   pull requests are all welcome.
-- **[DiskBOX](https://www.diskbox.app/)** — the original application whose
-  capabilities this project reimplements for macOS, Linux and Windows. Thanks
-  to its authors for showing what a disk analyser should do.
+- **The disk-analysis tools that came before** — the commercial analysers and
+  cleaners that showed the whole category what a disk analyser should do. This
+  project follows the same ground, but open-source, cross-platform and with a
+  CLI at the centre.
 
 ---
 
