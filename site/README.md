@@ -60,11 +60,29 @@ collects the files to upload. The `dist/` and `.astro/` entries in
 
 ```
 src/
+├── assets/                # the app logo (SVG)
 ├── content.config.ts     # the docs content collection (Starlight schema)
 └── content/docs/         # one .md / .mdx file per page
-astro.config.mjs          # Starlight config: title, sidebar, social links
+astro.config.mjs          # Starlight config: title, logo, sidebar, social links
 public/                   # static assets (favicon, images)
+scripts/make-logo.py      # draws the logo from the app icon's geometry
 ```
+
+## The logo
+
+The site shows the app's own icon — the donut chart on the dark squircle —
+next to the title and in the browser tab.
+
+`src/assets/logo.svg` and `public/favicon.svg` are the same artwork: the
+vector version of the app icon. `scripts/make-logo.py` draws it from the same
+geometry and palette as `electron/scripts/make-icon.py`, which draws the raster
+app icon, so the two never drift apart:
+
+```bash
+python3 scripts/make-logo.py
+```
+
+Run it after the app icon changes, and commit the result.
 
 Pages are plain Markdown with frontmatter:
 
