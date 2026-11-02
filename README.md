@@ -258,25 +258,6 @@ goes into `src/diskgoup/` and the GUI only presents it.
 
 ---
 
-## Sponsor
-
-DiskGOup is free, open source and MIT licensed — no paid tier, no telemetry,
-no advertising, and nothing held back. If it saved you time, you can support
-its development:
-
-[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4%20Polar-7c3aed?style=flat-square&labelColor=1a1a1a)](https://polar.sh/diskgoup)
-
-**[Sponsor the project →](https://polar.sh/diskgoup)**
-
-Sponsorship pays for the time, the CI minutes that build every release, and
-the reach — the details are on the
-[sponsoring page](https://diskgoup.vercel.app/community/sponsoring/).
-
-A bug report with the command and its output is worth more than a donation,
-and so is a pull request.
-
----
-
 ## Credits
 
 - **[goup.vc](https://goup.vc/)** — the DiskGOup community. This project is

@@ -90,12 +90,6 @@ export default defineConfig({
 						{ label: 'Contributing', slug: 'development/contributing' },
 					],
 				},
-				{
-					label: 'Community',
-					items: [
-						{ label: 'Sponsoring', slug: 'community/sponsoring' },
-					],
-				},
 			],
 		}),
 	],
