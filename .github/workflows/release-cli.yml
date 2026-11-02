@@ -21,8 +21,6 @@ on:
 
 permissions:
   contents: write
-  # The documentation step opens a pull request with the updated downloads page.
-  pull-requests: write
 
 env:
   # The console on Windows is cp1252 and cannot hold the "✓" the scripts print.
@@ -143,24 +141,3 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: scripts/publish-release.sh "$RELEASE_TAG" artifacts
-
-      - name: Point the documentation at the new release
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python3 site/scripts/update-downloads.py --version "$RELEASE_VERSION"
-          if git diff --quiet -- site/src/content/docs/getting-started/downloads.md; then
-            echo "the documentation already points at this release"
-            exit 0
-          fi
-          branch="docs/release-${RELEASE_TAG}"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$branch"
-          git add site/src/content/docs/getting-started/downloads.md
-          git commit -m "docs(site): point the download links at ${RELEASE_TAG}"
-          git push origin "$branch"
-          gh pr create --base main --head "$branch" \
-            --title "docs(site): point the download links at ${RELEASE_TAG}" \
-            --body "The release ${RELEASE_TAG} is out. This updates the version and the release-notes link on the downloads page."

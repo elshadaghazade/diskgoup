@@ -11,9 +11,9 @@ on:
   push:
     branches:
       - main
-    # A release opens a pull request with the updated downloads page. Merging
-    # that page back must not start another release, so a push that touches
-    # nothing else is ignored here.
+    # A release writes the version on the downloads page. A push that changes
+    # nothing else must not start another release, so a change to that page
+    # alone is ignored here.
     paths-ignore:
       - 'site/src/content/docs/getting-started/downloads.md'
   # A release can also be cut by hand, with a version of your choosing.
@@ -90,6 +90,12 @@ jobs:
 
       - name: Write the version into the project
         run: python3 scripts/set-version.py "${{ needs.prepare.outputs.version }}"
+
+      - name: Point the documentation at the release
+        # The downloads page is part of the release commit: the release and the
+        # documentation can never drift apart, and nothing has to be merged by
+        # hand afterwards.
+        run: python3 site/scripts/update-downloads.py --version "${{ needs.prepare.outputs.version }}"
 
       - name: Commit the version
         run: |

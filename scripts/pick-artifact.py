@@ -39,6 +39,11 @@ def main() -> int:
     matches = sorted(glob.glob(pattern, recursive=True))
     if not matches:
         print(f"✗ nothing matches {pattern}", file=sys.stderr)
+        nearby = sorted(p.name for p in Path(pattern).parent.glob("*"))
+        if nearby:
+            print("  the directory holds:", file=sys.stderr)
+            for entry in nearby:
+                print(f"    {entry}", file=sys.stderr)
         return 1
     if len(matches) > 1:
         print(f"✗ {pattern} matches {len(matches)} files:", file=sys.stderr)

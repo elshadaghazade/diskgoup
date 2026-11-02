@@ -59,7 +59,9 @@ jobs:
             id: linux-x64
             os: ubuntu-24.04
             builder: --linux --x64
-            match: electron/release/DiskGOup-Linux-x64.AppImage
+            # On Linux electron-builder calls the architecture "x86_64"; the
+            # artifact is renamed to the name the download links use.
+            match: electron/release/DiskGOup-Linux-*.AppImage
             asset: DiskGOup-Linux-x64.AppImage
 
     steps:

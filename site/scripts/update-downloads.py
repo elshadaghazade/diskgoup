@@ -8,8 +8,8 @@ published:
 
     python3 site/scripts/update-downloads.py --version 0.2.0
 
-The release workflow does it automatically and opens a pull request with the
-result, so a release and the documentation never drift apart.
+The release workflow does it automatically, as part of the release commit, so a
+release and the documentation never drift apart.
 
 Only the standard library is needed.
 """
