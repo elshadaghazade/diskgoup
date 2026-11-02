@@ -34,7 +34,7 @@ export default function Header() {
             </a>
           ))}
           <a
-            href="https://diskgoup.vercel.app/"
+            href="https://diskgoup-docs.vercel.app/"
             className="transition-colors hover:text-ink"
             rel="noreferrer"
             target="_blank"

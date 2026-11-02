@@ -4,7 +4,7 @@ The documentation site for [DiskGOup](https://github.com/elshadaghazade/diskgoup
 built with [Astro](https://astro.build/) and
 [Starlight](https://starlight.astro.build/).
 
-Live at **https://diskgoup.vercel.app**.
+Live at **https://diskgoup-docs.vercel.app**.
 
 The site lives in the app repository, under `site/`. It is its own Astro
 project with its own dependencies — the app's Python and Electron code is

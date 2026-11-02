@@ -54,7 +54,7 @@ export default function Faq() {
             you can read the answers in the code.
           </p>
           <a
-            href="https://diskgoup.vercel.app/getting-started/quick-start/"
+            href="https://diskgoup-docs.vercel.app/getting-started/quick-start/"
             className="mt-6 inline-block text-sm text-accent underline underline-offset-4"
             rel="noreferrer"
             target="_blank"
