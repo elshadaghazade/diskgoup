@@ -5,6 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/elshadaghazade/diskgoup?label=Release)](https://github.com/elshadaghazade/diskgoup/releases/latest)
 [![Platforms](https://img.shields.io/badge/macOS%20%7C%20Linux%20%7C%20Windows-4479a1.svg)](#downloads)
+[![Documentation](https://img.shields.io/badge/Documentation-diskgoup.vercel.app-4479a1.svg)](https://diskgoup.vercel.app/)
 
 DiskGOup shows you exactly where your disk space went — by folder, by file type,
 by age, and by content duplication — and gives you a staged, reviewed cleanup flow
@@ -12,6 +13,20 @@ instead of a one-click "delete my stuff".
 
 The **CLI is the product**. The Electron desktop app is a thin front-end that
 drives the CLI as a child process.
+
+---
+
+## Documentation
+
+**Official documentation: <https://diskgoup.vercel.app/>**
+
+| Guide | What it covers |
+|---|---|
+| [Getting started](https://diskgoup.vercel.app/getting-started/quick-start/) | install the CLI or the desktop app and run your first scan |
+| [Downloads](https://diskgoup.vercel.app/getting-started/downloads/) | every build, for every platform, with checksums |
+| [Commands](https://diskgoup.vercel.app/reference/cli/) | the full CLI reference |
+| [Cleanup guide](https://diskgoup.vercel.app/guide/cleanup/) | how the staged, reviewed cleanup works |
+| [Development](https://diskgoup.vercel.app/development/building/) | how the CLI and the desktop app fit together, and how to release |
 
 ---
 
