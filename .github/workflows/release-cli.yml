@@ -24,6 +24,10 @@ permissions:
   # The documentation step opens a pull request with the updated downloads page.
   pull-requests: write
 
+env:
+  # The console on Windows is cp1252 and cannot hold the "✓" the scripts print.
+  PYTHONIOENCODING: utf-8
+
 jobs:
   build:
     name: ${{ matrix.name }}

@@ -22,6 +22,10 @@ on:
 permissions:
   contents: write
 
+env:
+  # The console on Windows is cp1252 and cannot hold the "✓" the scripts print.
+  PYTHONIOENCODING: utf-8
+
 jobs:
   build:
     name: ${{ matrix.name }}
@@ -37,25 +41,25 @@ jobs:
             id: macos-arm64
             os: macos-15
             builder: --mac --arm64
-            match: electron/release/DiskGOup-*-arm64.dmg
+            match: electron/release/DiskGOup-macOS-arm64.dmg
             asset: DiskGOup-macOS-arm64.dmg
           - name: macOS (Intel)
             id: macos-x64
             os: macos-15-intel
             builder: --mac --x64
-            match: electron/release/DiskGOup-*-x64.dmg
+            match: electron/release/DiskGOup-macOS-x64.dmg
             asset: DiskGOup-macOS-x64.dmg
           - name: Windows (x64)
             id: windows-x64
             os: windows-2022
             builder: --win --x64
-            match: 'electron/release/DiskGOup Setup *.exe'
+            match: electron/release/DiskGOup-Windows-x64.exe
             asset: DiskGOup-Windows-x64.exe
           - name: Linux (x64)
             id: linux-x64
             os: ubuntu-24.04
-            builder: --linux AppImage --x64
-            match: electron/release/DiskGOup-*-x86_64.AppImage
+            builder: --linux --x64
+            match: electron/release/DiskGOup-Linux-x64.AppImage
             asset: DiskGOup-Linux-x64.AppImage
 
     steps:
@@ -103,7 +107,9 @@ jobs:
 
       - name: Package the installer
         working-directory: electron
-        run: npx electron-builder ${{ matrix.builder }}
+        # `--publish never`: the release workflow attaches the files itself, so
+        # electron-builder must not try to publish them a second time.
+        run: npx electron-builder ${{ matrix.builder }} --publish never
 
       - name: Give the installer its release name
         run: python scripts/pick-artifact.py "${{ matrix.match }}" "${{ matrix.asset }}"

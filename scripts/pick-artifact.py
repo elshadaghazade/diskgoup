@@ -27,6 +27,10 @@ OUT = ROOT / "release-assets"
 
 
 def main() -> int:
+    # The console on Windows is cp1252 and cannot hold a "✓".
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     if len(sys.argv) != 3:
         print(__doc__, file=sys.stderr)
         return 2
