@@ -10,9 +10,19 @@ subscribers.
 If it saved you time, cleaned up a disk, or gave you a scriptable tool you
 could actually use on a server, you can support its development:
 
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/elshadaghazade?style=flat-square&label=Sponsor)](https://github.com/sponsors/elshadaghazade)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4%20Polar-7c3aed?style=flat-square&labelColor=1a1a1a)](https://polar.sh/diskgoup)
 
-**[Sponsor the project on GitHub →](https://github.com/sponsors/elshadaghazade)**
+**[Sponsor the project →](https://polar.sh/diskgoup)**
+
+One click, any amount, no account on this side — Polar handles the payment,
+the receipt and the tax, and the whole amount goes to the project.
+
+:::note
+The sponsor button points at **Polar** rather than GitHub Sponsors on
+purpose. GitHub only pays out to maintainers who live in one of its supported
+regions, and Azerbaijan is not one of them — a GitHub Sponsors button would
+look right and never deliver anything. Polar pays out here.
+:::
 
 ## What the money pays for
 

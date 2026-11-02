@@ -1,5 +1,11 @@
 # The "Sponsor" button on the repository and on the profile.
 #
-# The account has to have GitHub Sponsors enabled for the button to lead
-# anywhere — see https://github.com/settings/sponsors
-github: [elshadaghazade]
+# Not GitHub Sponsors: GitHub only pays out to maintainers who live in one
+# of its supported regions, and Azerbaijan is not one of them — a button for
+# it would look right and never deliver a cent.
+#
+# Polar is the merchant of record: it takes the money, handles the sales tax
+# and the receipts, and pays out to Azerbaijan. The name below is the Polar
+# organisation — create it at https://polar.sh and point it at this
+# repository, and the button starts working.
+polar: [diskgoup]

@@ -264,9 +264,9 @@ DiskGOup is free, open source and MIT licensed — no paid tier, no telemetry,
 no advertising, and nothing held back. If it saved you time, you can support
 its development:
 
-[![GitHub Sponsors](https://img.shields.io/github/sponsors/elshadaghazade?style=flat-square&label=Sponsor)](https://github.com/sponsors/elshadaghazade)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4%20Polar-7c3aed?style=flat-square&labelColor=1a1a1a)](https://polar.sh/diskgoup)
 
-**[Sponsor the project on GitHub →](https://github.com/sponsors/elshadaghazade)**
+**[Sponsor the project →](https://polar.sh/diskgoup)**
 
 Sponsorship pays for the time, the CI minutes that build every release, and
 the reach — the details are on the
