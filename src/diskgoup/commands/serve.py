@@ -96,6 +96,7 @@ class Server:
             {
                 "app.info": self._app_info,
                 "app.ping": self._ping,
+                "app.reset": self._app_reset,
                 "drives.list": self._drives_list,
                 "scans.list": self._scans_list,
                 "scans.remove": self._scans_remove,
@@ -260,6 +261,42 @@ class Server:
     def _ping(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
         return {"pong": True}
 
+    def _app_reset(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
+        """Put the app back to the state it had before the first scan.
+
+        The index is a cache of the disk — everything in it can be rebuilt by
+        scanning again. This is the way out when it is corrupt or wedged, so
+        it must not depend on opening the old database: the file is removed
+        first and the empty one is written afterwards.
+
+        A running scan holds the index open, so it is stopped first and the
+        reset waits for it to let go.
+        """
+        from diskgoup.core.reset import ResetError, reset_app
+
+        if self._scan_is_running():
+            self._cancel_running_scan(server)
+            deadline = time.monotonic() + 30.0
+            while self._scan_is_running() and time.monotonic() < deadline:
+                time.sleep(0.05)
+            if self._scan_is_running():
+                raise RuntimeError("a scan is still running — stop it and try again")
+
+        try:
+            result = reset_app()
+        except ResetError as exc:
+            raise RuntimeError(str(exc)) from exc
+        return {"reset": True, **result.to_dict()}
+
+    def _cancel_running_scan(self, server: Server) -> None:
+        """Ask the running scan to stop, without failing when there is none."""
+        with self._scan_lock:
+            control = self._scan_control
+        if control is None:
+            return
+        control.cancel()
+        server.notify("scan.state", {"state": "canceled"})
+
     def _drives_list(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
         from diskgoup.core.partitions import volumes
 
@@ -292,14 +329,14 @@ class Server:
         if not root:
             return {"error": "path is required"}
 
-        with self._index() as index:
-            control = ScanControl()
-            with self._scan_lock:
-                if self._scan_control is not None:
-                    raise RuntimeError("a scan is already running")
-                self._scan_control = control
+        control = ScanControl()
+        with self._scan_lock:
+            if self._scan_control is not None:
+                raise RuntimeError("a scan is already running")
+            self._scan_control = control
 
-            try:
+        try:
+            with self._index() as index:
                 scanner = Scanner(
                     index,
                     ScanOptions(
@@ -325,9 +362,11 @@ class Server:
 
                 result = scanner.run(on_progress, control=control)
                 return result.to_dict()
-            finally:
-                with self._scan_lock:
-                    self._scan_control = None
+        finally:
+            # Released after the index is closed, so a reset that waits for
+            # the scan to end is safe to run straight away.
+            with self._scan_lock:
+                self._scan_control = None
 
     def _scan_refresh(self, params: dict[str, Any], server: Server) -> dict[str, Any]:
         """Walk one folder of a scan again and correct the index.

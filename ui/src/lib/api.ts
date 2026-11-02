@@ -95,6 +95,17 @@ export const api = {
   removeScan: (scanId: number) =>
     call<{ removed: ScanMeta }>('scans.remove', { scan_id: scanId }),
 
+  /**
+   * Put the app back to the state it had before the first scan.
+   *
+   * The index is deleted and an empty one is written in its place — the way
+   * out of a corrupted or stuck database. No file on the disk is touched.
+   */
+  resetApp: () =>
+    call<{ reset: boolean; index_path: string; removed: string[]; config_removed: boolean }>(
+      'app.reset',
+    ),
+
   scan: (path: string) =>
     call<ScanMeta & { canceled: boolean }>('scan.run', { path }),
 

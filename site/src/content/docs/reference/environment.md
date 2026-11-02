@@ -3,7 +3,7 @@ title: Environment variables
 description: The environment variables DiskGOup reads, and what they change.
 ---
 
-DiskGOup reads three environment variables of its own. Everything else it
+DiskGOup reads four environment variables of its own. Everything else it
 reads is a platform convention that other programs use too.
 
 ## DiskGOup's own
@@ -11,6 +11,7 @@ reads is a platform convention that other programs use too.
 | Variable | What it does |
 |---|---|
 | `DISKGOUP_INDEX` | The path of the SQLite index. Overrides the platform default. |
+| `DISKGOUP_CONFIG` | The path of the configuration file. Overrides the platform default. |
 | `DISKGOUP_WORKERS` | How many workers a parallel run uses. |
 | `DISKGOUP_PROCESSES` | Chooses the parallel backend: `1` for processes, `0` for threads. |
 
@@ -24,6 +25,15 @@ The index goes here instead of the platform cache directory. Useful for
 keeping a separate index per project, or for a throwaway index in a test.
 
 The parent directory has to exist.
+
+### `DISKGOUP_CONFIG`
+
+```bash
+export DISKGOUP_CONFIG=~/tmp/diskgoup-config.json
+```
+
+The configuration file goes here instead of the platform config directory.
+`diskgoup reset` removes the file this points at.
 
 ### `DISKGOUP_WORKERS`
 

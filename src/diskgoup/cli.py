@@ -21,6 +21,7 @@ from diskgoup.commands import (
     games,
     monitor,
     reports,
+    reset,
     search,
     serve,
     snapshots,
@@ -81,6 +82,7 @@ reports.register(app)
 games.register(app)
 applications.register(app)
 monitor.register(app)
+reset.register(app)
 serve.register(app)
 
 

@@ -47,6 +47,7 @@ an open, scriptable CLI at the centre and the desktop app on top of it.
 | `diskgoup serve` (JSON-RPC over stdio, for the GUI) | ✅ working |
 | Electron + Vite desktop app | ✅ working — spawns the CLI, renders all nine sections |
 | Desktop scan list | ✅ working — every stored scan is listed and can be opened or deleted |
+| Factory reset | ✅ working — `diskgoup reset` / **⟲ Reset app** rebuilds the index from scratch |
 
 ---
 
@@ -137,6 +138,9 @@ uv run diskgoup cleanup commit
 
 # Machine-readable output for scripting
 uv run diskgoup --json types ~/ | jq '.types[0]'
+
+# Start over from scratch — replaces a corrupted or stuck index
+uv run diskgoup reset
 ```
 
 Every command accepts `--json`, which is how the desktop app consumes the CLI.

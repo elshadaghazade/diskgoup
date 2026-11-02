@@ -170,7 +170,22 @@ behind rather than nothing.
 `diskgoup scans remove 3` deletes the scan and, through the foreign keys,
 every entry, hash and staged row that belonged to it.
 
-To wipe everything, delete the file:
+To wipe everything, reset the app:
+
+```bash
+diskgoup reset
+```
+
+That deletes the database **and** the SQLite files beside it — the write-ahead
+log, the shared-memory file and the rollback journal — and writes a new, empty
+index with the current schema. The side files belong to the old database:
+leaving one behind would let the new index read the old one's data.
+
+This is also the way out of a corrupted index. A damaged database makes every
+command fail with *"database disk image is malformed"*, and the reset never
+opens the old file — it removes it first.
+
+To delete the file by hand instead:
 
 ```bash
 rm "$(python -c 'from diskgoup.paths import default_index_path; print(default_index_path())')"

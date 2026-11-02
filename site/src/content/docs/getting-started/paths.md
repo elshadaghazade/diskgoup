@@ -43,9 +43,13 @@ DISKGOUP_INDEX=/tmp/diskgoup-scratch.db diskgoup scan ~
 <config>/diskgoup/config.json
 ```
 
-The file is created on demand and is optional — every setting has a working
-default, and the CLI reads nothing from it today. It exists so that settings
-have a home when they need one.
+The file is optional — every setting has a working default, and the CLI
+reads nothing from it today. It exists so that settings have a home when they
+need one, and `diskgoup reset` removes it so the app starts from its
+defaults.
+
+Its path can be overridden with the `DISKGOUP_CONFIG` environment variable, in
+the same way `DISKGOUP_INDEX` overrides the index.
 
 ## The desktop app
 
@@ -54,6 +58,20 @@ for the app itself. The CLI child process inherits the environment, so
 `DISKGOUP_INDEX` and friends work the same way under the GUI.
 
 ## Removing everything
+
+```bash
+diskgoup reset
+```
+
+That deletes the scan index — the database and the SQLite files beside it —
+and writes a new, empty one in its place. Every scan goes with it; no file on
+your disk is touched, so the next scan reads it again. It is also the way out
+of an index that is corrupted or stuck.
+
+The desktop app has the same thing in its sidebar: **⟲ Reset app**, at the
+bottom of the left panel.
+
+To delete the cache directory by hand instead:
 
 ```bash
 rm -rf "$(python3 -c 'from platformdirs import user_cache_dir; print(user_cache_dir("diskgoup"))')"

@@ -64,7 +64,7 @@ pushes information the client did not ask for:
 
 ## The methods
 
-Thirty-four methods, in twelve groups.
+Thirty-six methods, in twelve groups.
 
 ### App
 
@@ -72,6 +72,12 @@ Thirty-four methods, in twelve groups.
 |---|---|---|
 | `app.info` | – | `{"version", "platform", "volumes": [...]}` |
 | `app.ping` | – | `{"pong": true}` |
+| `app.reset` | – | `{"reset": true, "index_path": "...", "removed": [...]}` |
+
+`app.reset` puts the app back to the state it had before the first scan: the
+index is deleted and an empty one is written in its place. A scan that is
+running is stopped first. It works on a corrupted index, because the old file
+is removed before anything tries to open it.
 
 ### Drives
 
@@ -211,11 +217,12 @@ the scan down to a crawl.
 
 ## Slow methods run in the background
 
-Seven methods are served on a worker thread rather than on the read loop:
+Nine methods are served on a worker thread rather than on the read loop:
 
 ```
 scan.run        scan.refresh     explore.types    explore.age
-view.layout     scans.remove     duplicates.find
+view.layout     scans.remove     duplicates.find  apps.list
+apps.uninstall
 ```
 
 The reason is practical. `scan.run` has to be there — the GUI pauses a

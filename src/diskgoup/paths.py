@@ -35,8 +35,15 @@ def default_index_path() -> Path:
 
 
 def config_path() -> Path:
-    """Location of the JSON configuration file."""
-    return config_dir() / "config.json"
+    """Location of the JSON configuration file.
+
+    The directory is not created here — the file is written by whoever owns
+    the settings, and a reset must not leave an empty directory behind.
+    """
+    override = os.environ.get("DISKGOUP_CONFIG")
+    if override:
+        return Path(override).expanduser()
+    return Path(user_config_dir("diskgoup")) / "config.json"
 
 
 def env_index_path() -> Path | None:

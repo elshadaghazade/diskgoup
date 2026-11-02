@@ -45,6 +45,7 @@ to script DiskGOup from a shell. Every command supports it.
 | [`games`](#games) | Discover and measure installed games. |
 | [`apps`](#apps) | List installed applications and their footprint. |
 | [`monitor`](#monitor) | Watch live disk and network usage. |
+| [`reset`](#reset) | Delete the scan index and start over with an empty one. |
 | [`serve`](#serve) | Run the JSON-RPC server on stdin/stdout. |
 
 ---
@@ -339,6 +340,28 @@ diskgoup monitor sample
 |---|---|
 | `watch` | `--interval SECONDS` (2), `--count N` (0 = forever), `--processes N` (0) |
 | `sample` | – |
+
+## reset
+
+```bash
+diskgoup reset [--yes]
+```
+
+Deletes the scan index and writes a new, empty one in its place. This is the
+way out of an index that is corrupted or stuck: the old database — and the
+SQLite files beside it — are removed first, so a file that cannot even be
+opened is replaced all the same.
+
+Every scan goes with it: the scans, their entries, their snapshots and the
+staged list. **No file on your disk is deleted** — the next scan reads it
+again.
+
+| Option | What it does |
+|---|---|
+| `--yes` / `-y` | Skip the confirmation prompt. |
+
+The configuration file is removed with it, so the app starts from its
+defaults.
 
 ## serve
 

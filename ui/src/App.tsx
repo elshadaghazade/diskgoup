@@ -98,6 +98,9 @@ export default function App() {
   const [pendingRemoval, setPendingRemoval] = useState<ScanMeta | null>(null)
   // The scan being removed from the index — it can take a while.
   const [removingScan, setRemovingScan] = useState<number | null>(null)
+  // The index is being reset — the app starts over from scratch.
+  const [pendingReset, setPendingReset] = useState(false)
+  const [resetting, setResetting] = useState(false)
   const [focus, setFocus] = useState(false)
   // The entry the user selected in the folder browser — the inspector shows it.
   const [selected, setSelected] = useState<BrowserEntry | null>(null)
@@ -169,11 +172,11 @@ export default function App() {
     if (!focus) return
     const onKey = (event: KeyboardEvent) => {
       // The confirm dialog owns Escape while it is open.
-      if (event.key === 'Escape' && !pendingRemoval) setFocus(false)
+      if (event.key === 'Escape' && !pendingRemoval && !pendingReset) setFocus(false)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [focus, pendingRemoval])
+  }, [focus, pendingRemoval, pendingReset])
 
   const runScan = useCallback(async (target: string) => {
     setBusy(true)
@@ -276,6 +279,32 @@ export default function App() {
       setRemovingScan(null)
     }
   }, [pendingRemoval, removingScan, scan])
+
+  /**
+   * Put the app back to the state it had before the first scan.
+   *
+   * The index is deleted and an empty one is written in its place — the way
+   * out of a corrupted or stuck database. Every scan goes with it, so the
+   * views that read one are emptied as well.
+   */
+  const confirmReset = useCallback(async () => {
+    if (resetting) return
+    setResetting(true)
+    setError('')
+    try {
+      await api.resetApp()
+      setScans([])
+      setScan(null)
+      setSelected(null)
+      setProgress(null)
+      setPendingReset(false)
+      setMessage('The index was reset — every scan is gone')
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setResetting(false)
+    }
+  }, [resetting])
 
   /**
    * The open scan has new numbers.
@@ -406,9 +435,11 @@ export default function App() {
           scan={scan}
           busy={busy}
           removing={removingScan}
+          resetting={resetting}
           onSelectRoot={onSelectRoot}
           onOpenScan={onOpenScan}
           onRemoveScan={onRemoveScan}
+          onReset={() => setPendingReset(true)}
         />
 
         <main className="workspace">{tabContent}</main>
@@ -435,6 +466,18 @@ export default function App() {
           busy={removingScan !== null}
           onCancel={cancelRemoveScan}
           onConfirm={() => void confirmRemoveScan()}
+        />
+      )}
+
+      {pendingReset && (
+        <ConfirmDialog
+          title="Reset the app?"
+          body="Every scan, its entries and its snapshots are deleted from the index, and an empty one takes their place. No file on your disk is deleted — the next scan reads it again."
+          confirmLabel="Reset app"
+          busyLabel="Resetting…"
+          busy={resetting}
+          onCancel={() => setPendingReset(false)}
+          onConfirm={() => void confirmReset()}
         />
       )}
     </div>
