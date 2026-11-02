@@ -17,8 +17,9 @@ export default function DemoSection() {
           </h2>
           <p className="mt-4 text-base leading-relaxed text-muted">
             This is the real desktop app, running in your browser. Click into a folder, switch
-            between the eight views, open the duplicates and put something on the review list — the
-            whole window works.
+            between the eight views, and walk through all nine sections — search, archives,
+            duplicates, applications, games, monitor, snapshots and reports. The whole window
+            works.
           </p>
         </div>
 

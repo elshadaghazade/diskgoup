@@ -140,7 +140,7 @@ export default function Downloads() {
               same program: verify the download against the SHA-256 checksums shipped with every
               release, or build it from the source. Both are one command away —{' '}
               <a
-                href="https://diskgoup.vercel.app/getting-started/downloads/"
+                href="https://diskgoup-docs.vercel.app/getting-started/downloads/"
                 className="text-accent underline underline-offset-4"
                 rel="noreferrer"
                 target="_blank"

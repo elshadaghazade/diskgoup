@@ -4,5 +4,5 @@ contact_links:
     url: https://github.com/elshadaghazade/diskgoup/discussions
     about: Discuss an idea before opening an issue — it is the fastest way to an answer.
   - name: The documentation
-    url: https://diskgoup.vercel.app
+    url: https://diskgoup-docs.vercel.app
     about: The documentation site, including the CLI reference and the download links.

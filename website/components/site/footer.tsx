@@ -8,16 +8,16 @@ const COLUMNS = [
       { label: 'Download', href: '#download' },
       { label: 'Explore the demo', href: '#explore' },
       { label: 'Features', href: '#features' },
-      { label: 'CLI reference', href: 'https://diskgoup.vercel.app/reference/cli/' },
+      { label: 'CLI reference', href: 'https://diskgoup-docs.vercel.app/reference/cli/' },
     ],
   },
   {
     title: 'Documentation',
     links: [
-      { label: 'Quick start', href: 'https://diskgoup.vercel.app/getting-started/quick-start/' },
-      { label: 'Desktop app', href: 'https://diskgoup.vercel.app/desktop/overview/' },
-      { label: 'Cleanup guide', href: 'https://diskgoup.vercel.app/guide/cleanup/' },
-      { label: 'Building and releasing', href: 'https://diskgoup.vercel.app/development/building/' },
+      { label: 'Quick start', href: 'https://diskgoup-docs.vercel.app/getting-started/quick-start/' },
+      { label: 'Desktop app', href: 'https://diskgoup-docs.vercel.app/desktop/overview/' },
+      { label: 'Cleanup guide', href: 'https://diskgoup-docs.vercel.app/guide/cleanup/' },
+      { label: 'Building and releasing', href: 'https://diskgoup-docs.vercel.app/development/building/' },
     ],
   },
   {
@@ -26,7 +26,7 @@ const COLUMNS = [
       { label: 'GitHub', href: 'https://github.com/elshadaghazade/diskgoup' },
       { label: 'Releases', href: 'https://github.com/elshadaghazade/diskgoup/releases' },
       { label: 'Issues', href: 'https://github.com/elshadaghazade/diskgoup/issues' },
-      { label: 'Contributing', href: 'https://diskgoup.vercel.app/development/contributing/' },
+      { label: 'Contributing', href: 'https://diskgoup-docs.vercel.app/development/contributing/' },
     ],
   },
 ]

@@ -34,7 +34,7 @@ export default function CliSection() {
           <div className="mt-7 flex flex-wrap gap-3">
             <Button asChild variant="outline">
               <a
-                href="https://diskgoup.vercel.app/reference/cli/"
+                href="https://diskgoup-docs.vercel.app/reference/cli/"
                 rel="noreferrer"
                 target="_blank"
               >

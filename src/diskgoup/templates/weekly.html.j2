@@ -79,7 +79,7 @@
       <div class="label">7-day change</div>
       <div class="value {% if report.comparison.total_growth > 0 %}up{% elif report.comparison.total_growth < 0 %}down{% endif %}">
         {% if report.has_history %}
-          {{ "{:+,.0f}".format(report.comparison.total_growth) | filesizeformat }}
+          {{ ("+" if report.comparison.total_growth > 0 else "") }}{{ report.comparison.total_growth | filesizeformat }}
         {% else %}—{% endif %}
       </div>
       <div class="note">
@@ -117,7 +117,7 @@
         <td class="num">{{ change.current | filesizeformat }}</td>
         <td class="num {% if change.growth > 0 %}up{% elif change.growth < 0 %}down{% else %}muted{% endif %}">
           {% if report.has_history and change.baseline is not none %}
-            {{ "{:+,.0f}".format(change.growth) | filesizeformat }}
+            {{ ("+" if change.growth > 0 else "") }}{{ change.growth | filesizeformat }}
           {% else %}—{% endif %}
         </td>
         <td class="num">{{ "%.1f"|format(change.share * 100) }}%</td>

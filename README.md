@@ -8,7 +8,7 @@ desktop GUI and scriptable CLI.
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/elshadaghazade/diskgoup?label=Release)](https://github.com/elshadaghazade/diskgoup/releases/latest)
 [![Platforms](https://img.shields.io/badge/macOS%20%7C%20Linux%20%7C%20Windows-4479a1.svg)](#downloads)
-[![Documentation](https://img.shields.io/badge/Documentation-diskgoup.vercel.app-4479a1.svg)](https://diskgoup.vercel.app/)
+[![Documentation](https://img.shields.io/badge/Documentation-diskgoup-docs.vercel.app-4479a1.svg)](https://diskgoup-docs.vercel.app/)
 
 DiskGOup shows you exactly where your disk space went — by folder, by file type,
 by age, and by content duplication — and gives you a staged, reviewed cleanup flow
@@ -21,17 +21,18 @@ drives the CLI as a child process.
 
 ## Documentation
 
-**Official documentation: <https://diskgoup.vercel.app/>**
+**Website: <https://diskgoup.vercel.app/>**
+**Official documentation: <https://diskgoup-docs.vercel.app/>**
 
 | Guide | What it covers |
 |---|---|
-| [Getting started](https://diskgoup.vercel.app/getting-started/quick-start/) | install the CLI or the desktop app and run your first scan |
-| [Downloads](https://diskgoup.vercel.app/getting-started/downloads/) | every build, for every platform, with checksums |
-| [Desktop app](https://diskgoup.vercel.app/desktop/overview/) | the window, its nine sections, the sidebar and focus mode |
-| [Explore](https://diskgoup.vercel.app/desktop/explore/) | the folder browser, the eight chart views, the inspector and safe-to-clean |
-| [Commands](https://diskgoup.vercel.app/reference/cli/) | the full CLI reference |
-| [Cleanup guide](https://diskgoup.vercel.app/guide/cleanup/) | how the staged, reviewed cleanup works |
-| [Development](https://diskgoup.vercel.app/development/building/) | how the CLI and the desktop app fit together, and how to release |
+| [Getting started](https://diskgoup-docs.vercel.app/getting-started/quick-start/) | install the CLI or the desktop app and run your first scan |
+| [Downloads](https://diskgoup-docs.vercel.app/getting-started/downloads/) | every build, for every platform, with checksums |
+| [Desktop app](https://diskgoup-docs.vercel.app/desktop/overview/) | the window, its nine sections, the sidebar and focus mode |
+| [Explore](https://diskgoup-docs.vercel.app/desktop/explore/) | the folder browser, the eight chart views, the inspector and safe-to-clean |
+| [Commands](https://diskgoup-docs.vercel.app/reference/cli/) | the full CLI reference |
+| [Cleanup guide](https://diskgoup-docs.vercel.app/guide/cleanup/) | how the staged, reviewed cleanup works |
+| [Development](https://diskgoup-docs.vercel.app/development/building/) | how the CLI and the desktop app fit together, and how to release |
 
 ---
 
@@ -95,13 +96,13 @@ nothing is lost.
 <img src="site/public/app/02-explore-treemap.png" width="480" alt="The treemap view of a scan">
 <br><strong>Explore</strong> — the folder browser and eight chart views:
 treemap, sunburst, flame, bubbles, mind map, top sizes and age map.
-<br><a href="https://diskgoup.vercel.app/desktop/explore/">Explore →</a>
+<br><a href="https://diskgoup-docs.vercel.app/desktop/explore/">Explore →</a>
 </td>
 <td width="50%" valign="top">
 <img src="site/public/app/11-safe-to-clean.png" width="480" alt="The safe-to-clean scope listing the caches and logs of the scan">
 <br><strong>Safe to clean</strong> — the caches and logs the operating system
 regenerates, staged for review instead of deleted on the spot.
-<br><a href="https://diskgoup.vercel.app/guide/cleanup/">Cleanup guide →</a>
+<br><a href="https://diskgoup-docs.vercel.app/guide/cleanup/">Cleanup guide →</a>
 </td>
 </tr>
 <tr>
@@ -109,32 +110,32 @@ regenerates, staged for review instead of deleted on the spot.
 <img src="site/public/app/15-duplicates.png" width="480" alt="The duplicates section listing identical files by hash">
 <br><strong>Duplicates</strong> — identical content, found by SHA-256 and an
 exact byte compare, with the extra copies grouped for review.
-<br><a href="https://diskgoup.vercel.app/desktop/duplicates/">Duplicates →</a>
+<br><a href="https://diskgoup-docs.vercel.app/desktop/duplicates/">Duplicates →</a>
 </td>
 <td width="50%" valign="top">
 <img src="site/public/app/12-search.png" width="480" alt="The search section with a name filter and result list">
 <br><strong>Search</strong> — by name, path, type, date and size, with all the
 conditions combined.
-<br><a href="https://diskgoup.vercel.app/desktop/search/">Search →</a>
+<br><a href="https://diskgoup-docs.vercel.app/desktop/search/">Search →</a>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="top">
 <img src="site/public/app/13-archives.png" width="480" alt="The archives section listing the members of a zip archive">
 <br><strong>Archives</strong> — look inside a ZIP without extracting anything.
-<br><a href="https://diskgoup.vercel.app/desktop/archives/">Archives →</a>
+<br><a href="https://diskgoup-docs.vercel.app/desktop/archives/">Archives →</a>
 </td>
 <td width="50%" valign="top">
 <img src="site/public/app/20-reports.png" width="480" alt="The reports section with the weekly HTML report and the CSV export">
 <br><strong>Reports</strong> — a weekly HTML report and a file-type CSV.
-<br><a href="https://diskgoup.vercel.app/desktop/reports/">Reports →</a>
+<br><a href="https://diskgoup-docs.vercel.app/desktop/reports/">Reports →</a>
 </td>
 </tr>
 </table>
 
 The remaining sections — **Applications**, **Games**, **Monitor** and
 **Snapshots** — are documented on
-[the desktop app page](https://diskgoup.vercel.app/desktop/overview/).
+[the desktop app page](https://diskgoup-docs.vercel.app/desktop/overview/).
 
 ---
 
@@ -154,7 +155,7 @@ The links always point at the newest release. The CLI binary is
 self-contained — no Python needed on the machine you run it on. The
 desktop app bundles the same binary.
 
-The full list is on the [downloads page](https://diskgoup.vercel.app/getting-started/downloads/).
+The full list is on the [downloads page](https://diskgoup-docs.vercel.app/getting-started/downloads/).
 
 ### Unsigned installers
 
@@ -179,7 +180,7 @@ to the same program:
   `sha256sum --check checksums-desktop.txt`.
 - **Build it from source** — see [Build for production](#build-for-production)
   below, or
-  [the building guide](https://diskgoup.vercel.app/development/building/).
+  [the building guide](https://diskgoup-docs.vercel.app/development/building/).
 
 ---
 
