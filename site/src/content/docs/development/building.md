@@ -15,8 +15,8 @@ description: How to set up the development environment, run the tests, and build
 ## Setting up
 
 ```bash
-git clone https://github.com/elshadaghazade/diskgoup-alternative
-cd diskgoup-alternative
+git clone https://github.com/elshadaghazade/diskgoup
+cd diskgoup
 uv sync
 ```
 
@@ -178,10 +178,60 @@ The macOS build is configured with `identity: "-"`, `hardenedRuntime: false`
 and `gatekeeperAssess: false` — it is not signed or notarized, so Gatekeeper
 will complain on another machine. Sign it before shipping to anyone else.
 
+## Releasing
+
+A release is a **git tag**. Pushing `v0.2.0` starts two workflows that build
+everything and attach it to the
+[GitHub release](https://github.com/elshadaghazade/diskgoup/releases) of that
+tag:
+
+| Workflow | What it builds |
+|---|---|
+| [`release-cli.yml`](https://github.com/elshadaghazade/diskgoup/blob/main/.github/workflows/release-cli.yml) | The CLI binary for macOS (arm64 + x64), Linux (x64 + arm64) and Windows (x64) |
+| [`release-desktop.yml`](https://github.com/elshadaghazade/diskgoup/blob/main/.github/workflows/release-desktop.yml) | The desktop app: a `.dmg` for macOS, an `.exe` for Windows, an `.AppImage` for Linux |
+
+The steps, in short:
+
+1. The tag gives the version — `scripts/set-version.py` writes it into the
+   Python package and both `package.json` files, so the artifact and the tag
+   always agree.
+2. The CLI is built with `uv run pyinstaller diskgoup.spec` and smoke-tested
+   with `diskgoup --version`.
+3. The desktop app is packaged with `electron-builder`, with the CLI binary
+   bundled into it.
+4. The files are uploaded to the release under fixed names — the
+   documentation links to them with `releases/latest/download/<name>`, so
+   those links never break.
+5. `site/scripts/update-downloads.py` updates the version on the
+   [downloads page](/getting-started/downloads/) and opens a pull request
+   with the change.
+
+So a release is:
+
+```bash
+# 1. the version, everywhere
+python3 scripts/set-version.py 0.2.0
+
+# 2. the commit
+git commit -am "release: 0.2.0"
+
+# 3. the tag — this is what triggers the build
+git tag -a v0.2.0 -m "DiskGOup 0.2.0"
+git push origin main --follow-tags
+```
+
+Then wait for the two workflows, and merge the pull request that updates the
+downloads page.
+
+:::caution
+The macOS and Windows installers are **unsigned**. Gatekeeper and SmartScreen
+will warn on a machine that has never seen them.
+:::
+
 ## The repository layout
 
 ```
-diskgoup-alternative/
+diskgoup/
 ├── src/diskgoup/          the Python package
 │   ├── cli.py             the Typer app
 │   ├── commands/          one module per CLI area

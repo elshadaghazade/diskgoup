@@ -7,6 +7,12 @@ DiskGOup ships as a Python CLI, as a standalone compiled binary, and as an
 Electron desktop app that bundles the binary. Pick the one that fits how you
 want to use it.
 
+:::tip
+Do not want to build anything? [Downloads →](/getting-started/downloads/) has
+a ready-made binary and installer for macOS, Linux and Windows, built by the
+project's CI.
+:::
+
 ## Requirements
 
 | Component | Needs |
@@ -21,8 +27,8 @@ interpreter for you.
 ## Install the CLI from source
 
 ```bash
-git clone https://github.com/elshadaghazade/diskgoup-alternative.git
-cd diskgoup-alternative
+git clone https://github.com/elshadaghazade/diskgoup.git
+cd diskgoup
 uv sync
 ```
 
