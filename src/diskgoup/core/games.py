@@ -290,19 +290,16 @@ def _measure_game(name: str, platform: str, path: Path, app_id: str | None) -> G
     base = GameEntry(category=CATEGORY_GAME_FILES, protected=True)
     game.categories[CATEGORY_GAME_FILES] = base
 
-    for root, dirnames, filenames in os.walk(path, onerror=lambda _e: None):
+    for root, _dirnames, filenames in os.walk(path, onerror=lambda _e: None):
         root_path = Path(root)
         # Only the top level of the install decides the category; everything
         # below it belongs to that category.
-        if root_path == path:
-            for child in sorted(dirnames):
-                category = category_for(child)
-                if category is None:
-                    continue
-                entry = game.categories.get(category)
-                if entry is None:
-                    entry = GameEntry(category=category, protected=category in PROTECTED_CATEGORIES)
-                    game.categories[category] = entry
+        parts = root_path.relative_to(path).parts
+        category = category_for(parts[0]) if parts else None
+        if category is not None and category not in game.categories:
+            game.categories[category] = GameEntry(
+                category=category, protected=category in PROTECTED_CATEGORIES
+            )
         for filename in filenames:
             file_path = root_path / filename
             try:
@@ -311,8 +308,12 @@ def _measure_game(name: str, platform: str, path: Path, app_id: str | None) -> G
                 continue
             game.files += 1
             game.size += size
-            base.size += size
-            base.files += 1
+            # The file is counted in the category its folder names — the DLC
+            # is DLC, the saves are saves. Only what is outside a named
+            # folder belongs to the game files.
+            entry = game.categories[category] if category else base
+            entry.size += size
+            entry.files += 1
 
     # A category's size is the sum of its own files; the base category holds
     # everything that is not in a named sub-category.
