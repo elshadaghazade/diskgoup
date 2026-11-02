@@ -10,9 +10,12 @@ type Props = {
   busy: boolean
   /** The id of the scan being removed from the index, if any. */
   removing: number | null
+  /** The index is being reset, if it is. */
+  resetting: boolean
   onSelectRoot: (path: string) => void
   onOpenScan: (meta: ScanMeta) => void
   onRemoveScan: (meta: ScanMeta) => void
+  onReset: () => void
 }
 
 /** A donut showing how much of the volume is in use. */
@@ -60,9 +63,11 @@ export default function Sidebar({
   scan,
   busy,
   removing,
+  resetting,
   onSelectRoot,
   onOpenScan,
   onRemoveScan,
+  onReset,
 }: Props) {
   const [types, setTypes] = useState<KindTotal[]>([])
   const [typesLoading, setTypesLoading] = useState(false)
@@ -204,6 +209,19 @@ export default function Sidebar({
           ))}
         </div>
       )}
+
+      <div className="sidebar-section">
+        <div className="sidebar-label">Recovery</div>
+        <button
+          className="button small danger"
+          onClick={onReset}
+          disabled={busy || resetting}
+          title="Delete the scan index and start over with an empty one"
+        >
+          {resetting ? 'Resetting…' : '⟲ Reset app'}
+        </button>
+        <div className="sidebar-hint">Start over with an empty index.</div>
+      </div>
     </aside>
   )
 }

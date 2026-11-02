@@ -42,7 +42,7 @@ command to run — a blank window is never left in front of you.
 | Part | What it is |
 |---|---|
 | **Top bar** | The section tabs, the name filter and the focus button. |
-| **Sidebar** | Rescan, the disk-usage ring, the volumes, the stored scans and the file-type breakdown. |
+| **Sidebar** | Rescan, the disk-usage ring, the volumes, the stored scans, the file-type breakdown and the reset button. |
 | **Workspace** | The section itself — the part that changes when you switch tabs. |
 | **Inspector** | The measurements of the open scan, or of the entry you selected. |
 | **Status bar** | Whether the CLI is connected, plus the last message. |
@@ -77,6 +77,11 @@ The sidebar is the same on every section.
   deletes the index rows, never a file.
 - **File types** — the breakdown of the open scan by kind, read straight from
   the index.
+- **⟲ Reset app** — deletes the scan index and writes an empty one in its
+  place, so the app starts over from scratch. This is the way out of an index
+  that is corrupted or stuck: a running scan is stopped first, the old
+  database is removed before anything tries to open it, and no file on your
+  disk is touched.
 
 ## Focus mode
 
