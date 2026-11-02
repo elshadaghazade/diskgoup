@@ -1,0 +1,35 @@
+{
+  "name": "diskgoup-website",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The DiskGOup marketing site — a single page with an interactive demo of the desktop app.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "demo:data": "uv run --project .. python scripts/build-demo-data.py",
+    "demo:css": "python3 scripts/scope-app-css.py"
+  },
+  "dependencies": {
+    "@radix-ui/react-accordion": "^1.3.1",
+    "@radix-ui/react-separator": "^1.2.0",
+    "@radix-ui/react-slot": "^1.5.0",
+    "@radix-ui/react-tabs": "^1.2.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.66.0",
+    "next": "16.4.4",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "tailwind-merge": "^3.7.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3"
+  }
+}
