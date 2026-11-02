@@ -18,10 +18,18 @@ from diskgoup.core.protect import (
     is_protected,
     is_system_path,
     protection_reason,
+    system_roots,
 )
 
 
 def test_system_roots_are_protected() -> None:
+    """Every root of the running platform is protected."""
+    for root in system_roots():
+        assert is_system_path(root), root
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="the macOS system layout")
+def test_the_macos_system_roots_are_protected() -> None:
     assert is_system_path("/System/Library/CoreServices")
     assert is_system_path("/Library/Preferences")
     assert is_system_path("/Applications")
@@ -33,6 +41,7 @@ def test_user_paths_are_not_protected() -> None:
     assert not is_system_path("/Volumes/Data/Users/someone")
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="the macOS system layout")
 def test_macos_user_temp_is_cleanable() -> None:
     # /private/var holds both OS state and the per-user temporary directory.
     # Only the OS-owned parts are protected — a disk analyser that refuses to
@@ -168,12 +177,14 @@ def test_a_protected_parent_protects_its_children() -> None:
     assert entry_is_protected("/System/Library/thing", "thing", _fake_stat(), guard)
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="the macOS system layout")
 def test_the_guard_knows_a_system_root() -> None:
     assert guard_for("/System").under_root
     assert guard_for("/System/Library").under_root
     assert not guard_for("/Users/someone").under_root
 
 
+@pytest.mark.skipif(sys.platform != "darwin", reason="the macOS system layout")
 def test_the_macos_data_volume_is_judged_as_the_place_it_mirrors() -> None:
     """The writable data volume sits inside /System but holds the user's files.
 
@@ -249,6 +260,6 @@ def test_the_reason_says_why_an_item_is_refused(tmp_path: Path) -> None:
     assert protection_reason(target) is None
     assert protection_reason(target, Kind.DOCUMENT) is None
     assert protection_reason(target, Kind.GAME) == PROTECTED_GAME
-    assert protection_reason(Path("/System/Library")) == PROTECTED_SYSTEM
+    assert protection_reason(Path(system_roots()[0])) == PROTECTED_SYSTEM
     # A file inside a game folder is game data as well.
     assert protection_reason(target, parent_kind=Kind.GAME) == PROTECTED_GAME

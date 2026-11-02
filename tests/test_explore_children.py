@@ -14,6 +14,7 @@ import pytest
 
 from diskgoup.commands.serve import INTERNAL_ERROR, Server
 from diskgoup.core.cleanup import stage
+from diskgoup.core.protect import system_roots
 from diskgoup.core.scanner import Scanner, ScanOptions
 from diskgoup.core.store import _CHILDREN_SQL, ScanIndex
 
@@ -159,6 +160,7 @@ def test_the_listing_says_what_cannot_be_cleaned(scanned: tuple[int, str, Path])
 def test_a_file_inside_a_system_folder_is_protected(scanned: tuple[int, str, Path]) -> None:
     """The verdict is live: a path under a system root is protected."""
     scan_id, root, db = scanned
+    system_path = f"{system_roots()[0]}/Library/Thing/movie.mp4"
 
     with ScanIndex(db) as index:
         row = index.entry_by_path(scan_id, Path(root))
@@ -167,7 +169,7 @@ def test_a_file_inside_a_system_folder_is_protected(scanned: tuple[int, str, Pat
         movie = next(child for child in children if child["name"] == "movie.mp4")
         index.connection.execute(
             "UPDATE entries SET path = ? WHERE id = ?",
-            ("/System/Library/Thing/movie.mp4", int(movie["id"])),
+            (system_path, int(movie["id"])),
         )
         index.commit()
 
@@ -180,6 +182,7 @@ def test_a_file_inside_a_system_folder_is_protected(scanned: tuple[int, str, Pat
 def test_the_listing_agrees_with_the_cleanup_gate(scanned: tuple[int, str, Path]) -> None:
     """A badge in the list must tell the truth about what the gate will do."""
     scan_id, root, db = scanned
+    system_path = f"{system_roots()[0]}/Library/Thing/movie.mp4"
 
     with ScanIndex(db) as index:
         row = index.entry_by_path(scan_id, Path(root))
@@ -188,7 +191,7 @@ def test_the_listing_agrees_with_the_cleanup_gate(scanned: tuple[int, str, Path]
         movie = next(child for child in children if child["name"] == "movie.mp4")
         index.connection.execute(
             "UPDATE entries SET path = ? WHERE id = ?",
-            ("/System/Library/Thing/movie.mp4", int(movie["id"])),
+            (system_path, int(movie["id"])),
         )
         index.commit()
 
@@ -196,7 +199,7 @@ def test_the_listing_agrees_with_the_cleanup_gate(scanned: tuple[int, str, Path]
     listed = next(entry for entry in result["entries"] if entry["name"] == "movie.mp4")
 
     with ScanIndex(db) as index:
-        _, refused = stage(index, scan_id, [Path("/System/Library/Thing/movie.mp4")])
+        _, refused = stage(index, scan_id, [Path(system_path)])
 
     assert len(refused) == 1
     assert listed["protected"] is True
