@@ -15,6 +15,11 @@ export default defineConfig({
 			title: 'DiskGOup',
 			description:
 				'Cross-platform disk space analyzer and duplicate file finder for macOS, Linux and Windows.',
+			// the app's own icon — the same donut chart the desktop app shows
+			logo: {
+				src: './src/assets/logo.svg',
+				alt: 'DiskGOup',
+			},
 			// the custom 404 page lives in src/content/docs/404.md
 			disable404Route: true,
 			social: [
