@@ -205,10 +205,10 @@ The steps, in short:
 4. **The files** are uploaded to the release under fixed names — the
    documentation links to them with `releases/latest/download/<name>`, so
    those links never break.
-5. **The documentation** follows: `site/scripts/update-downloads.py` updates
-   the version on the [downloads page](/getting-started/downloads/) and opens a
-   pull request with the change. Merging that pull request does not start
-   another release.
+5. **The documentation** follows in the same commit:
+   `site/scripts/update-downloads.py` updates the version on the
+   [downloads page](/getting-started/downloads/), so a release and the
+   documentation never drift apart. Nothing is left to merge by hand.
 
 Two ways to cut a release by hand, if you want one:
 
