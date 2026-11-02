@@ -1,0 +1,94 @@
+name: CI
+
+# Every pull request runs the checks the project promises: the CLI's tests and
+# types, the types of both halves of the desktop app, and the documentation
+# site. The same checks run on main, so a broken merge is visible at once.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cli:
+    name: The CLI
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version-file: .python-version
+
+      - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync
+
+      - name: Lint
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+
+      - name: Types
+        run: uv run mypy
+
+      - name: Tests
+        run: uv run pytest
+
+  desktop:
+    name: The desktop app
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            ui/package-lock.json
+            electron/package-lock.json
+
+      - name: Install
+        run: |
+          npm --prefix ui ci
+          npm --prefix electron ci
+
+      - name: The renderer types
+        run: npm --prefix ui run typecheck
+
+      - name: The main process
+        run: npm --prefix electron run build:electron
+
+  docs:
+    name: The documentation site
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      # Astro 7 needs Node 22.23.4 or newer.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install
+        working-directory: site
+        run: |
+          # Yarn 1.x — the version the lockfile and the project use.
+          npm install --global yarn@1.22.22
+          yarn install --frozen-lockfile
+
+      - name: Build
+        working-directory: site
+        run: yarn build

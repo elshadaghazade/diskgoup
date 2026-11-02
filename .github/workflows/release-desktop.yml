@@ -10,6 +10,14 @@ on:
   push:
     tags:
       - 'v*'
+  # The release workflow starts this one, so that a merge into main is
+  # enough to publish the installers. The version can also be given by hand.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The version to build, for example 0.2.0. Leave it empty to take it from the tag.'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -75,8 +83,14 @@ jobs:
           npm --prefix ui ci
           npm --prefix electron ci
 
+      - name: The release we are building
+        run: |
+          version="${{ inputs.version || github.ref_name }}"
+          echo "RELEASE_VERSION=${version#v}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=v${version#v}" >> "$GITHUB_ENV"
+
       - name: Take the version from the tag
-        run: python scripts/set-version.py "${GITHUB_REF_NAME#v}"
+        run: python scripts/set-version.py "$RELEASE_VERSION"
 
       - name: Build the renderer
         run: npm --prefix ui run build
@@ -112,6 +126,12 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      - name: The release we are publishing
+        run: |
+          version="${{ inputs.version || github.ref_name }}"
+          echo "RELEASE_VERSION=${version#v}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=v${version#v}" >> "$GITHUB_ENV"
+
       - name: Checksums
         run: |
           cd artifacts
@@ -121,4 +141,4 @@ jobs:
       - name: Attach the files to the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: scripts/publish-release.sh "$GITHUB_REF_NAME" artifacts
+        run: scripts/publish-release.sh "$RELEASE_TAG" artifacts

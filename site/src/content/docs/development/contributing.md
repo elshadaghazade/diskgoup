@@ -207,10 +207,11 @@ and move it to *In progress*.
 
 ## The releases
 
-A release is a git tag. Pushing `v0.2.0` builds the CLI for every platform
-and the desktop app for every platform, and attaches them to the
-[release](https://github.com/elshadaghazade/diskgoup/releases). The steps are
-in [Building and releasing](/development/building/).
+**Merging into `main` is what publishes a release.** The CLI and the desktop
+app are built for every platform and attached to the
+[release](https://github.com/elshadaghazade/diskgoup/releases) — no commands to
+run, no tag to push. The steps are in
+[Building and releasing](/development/building/).
 
 ## The documentation
 

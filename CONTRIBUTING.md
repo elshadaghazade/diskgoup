@@ -222,18 +222,23 @@ and move it to *In progress*.
 
 ## 10. The releases
 
-A release is a git tag. Pushing `v0.2.0` builds the CLI for every platform
-and the desktop app for every platform, and attaches them to the
-[release](https://github.com/elshadaghazade/diskgoup/releases):
+**Merging into `main` is what publishes a release.** The workflow works out the
+version, tags it, and builds the CLI and the desktop app for every platform;
+the files are attached to the
+[release](https://github.com/elshadaghazade/diskgoup/releases).
 
-```bash
-python3 scripts/set-version.py 0.2.0
-git commit -am "release: 0.2.0"
-git tag -a v0.2.0 -m "DiskGOup 0.2.0"
-git push origin main --follow-tags
-```
+The version follows what was merged:
 
-The two workflows do the rest — see
+| What was merged | The release |
+|---|---|
+| the first release | the version in `pyproject.toml` |
+| a `feat:` commit | a minor release — `0.2.0` → `0.3.0` |
+| a breaking change | a major release |
+| anything else | a patch release — `0.2.0` → `0.2.1` |
+
+Nothing has to be done by hand. To cut a release with a version of your own
+choosing, run the *Cut a release* workflow from the Actions tab; to see how it
+works, read
 [Building and releasing](site/src/content/docs/development/building.md).
 
 ---
