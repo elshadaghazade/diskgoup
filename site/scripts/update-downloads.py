@@ -31,6 +31,10 @@ END = "<!-- release:end -->"
 
 
 def main() -> int:
+    # The console on Windows is cp1252 and cannot hold a "✓".
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", required=True, help="the version, e.g. 0.2.0")
     args = parser.parse_args()

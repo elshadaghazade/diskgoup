@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 
 OWNER = "elshadaghazade"
 TITLE = "DiskGOup"
@@ -149,6 +150,10 @@ def set_columns(project_id: str, field_id: str, options: list[dict]) -> None:
 
 
 def main() -> int:
+    # The console on Windows is cp1252 and cannot hold a "✓".
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     ensure_scope()
     project_id, url = find_or_create()
     field_id, options = status_field(project_id)

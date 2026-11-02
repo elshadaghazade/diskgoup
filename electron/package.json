@@ -23,12 +23,12 @@
     "dev:electron": "tsc -w",
     "dev": "npm run build:electron && npm run build:cli && cross-env DISKGOUP_ELECTRON_DEV=1 electron .",
     "start": "electron .",
-    "dist:mac": "npm run build && electron-builder --mac",
-    "dist:mac:arm64": "npm run build && electron-builder --mac --arm64",
-    "dist:mac:x64": "npm run build && electron-builder --mac --x64",
-    "dist:win": "npm run build && electron-builder --win",
-    "dist:win:x64": "npm run build && electron-builder --win --x64",
-    "dist:linux": "npm run build && electron-builder --linux"
+    "dist:mac": "npm run build && electron-builder --mac --arm64 --x64 --publish never",
+    "dist:mac:arm64": "npm run build && electron-builder --mac --arm64 --publish never",
+    "dist:mac:x64": "npm run build && electron-builder --mac --x64 --publish never",
+    "dist:win": "npm run build && electron-builder --win --x64 --publish never",
+    "dist:win:x64": "npm run build && electron-builder --win --x64 --publish never",
+    "dist:linux": "npm run build && electron-builder --linux --x64 --publish never"
   },
   "devDependencies": {
     "cross-env": "^7.0.3",
@@ -61,13 +61,10 @@
       "category": "public.app-category.utilities",
       "target": [
         {
-          "target": "dmg",
-          "arch": [
-            "arm64",
-            "x64"
-          ]
+          "target": "dmg"
         }
       ],
+      "artifactName": "DiskGOup-macOS-${arch}.dmg",
       "identity": "-",
       "hardenedRuntime": false,
       "gatekeeperAssess": false
@@ -80,7 +77,8 @@
             "x64"
           ]
         }
-      ]
+      ],
+      "artifactName": "DiskGOup-Windows-${arch}.exe"
     },
     "nsis": {
       "oneClick": false,
@@ -91,6 +89,7 @@
       "target": [
         "AppImage"
       ],
+      "artifactName": "DiskGOup-Linux-${arch}.AppImage",
       "category": "Utility"
     },
     "dmg": {
