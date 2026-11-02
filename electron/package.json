@@ -11,7 +11,7 @@
     "type": "git",
     "url": "https://github.com/elshadaghazade/diskgoup.git"
   },
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Electron wrapper for DiskGOup \u2014 bundles the Vite UI and the compiled CLI binary.",
   "main": "dist/main.js",
   "scripts": {

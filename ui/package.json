@@ -11,7 +11,7 @@
     "type": "git",
     "url": "https://github.com/elshadaghazade/diskgoup.git"
   },
-  "version": "0.1.4",
+  "version": "0.2.0",
   "type": "module",
   "description": "DiskGOup desktop UI — a thin front-end over the DiskGOup CLI.",
   "scripts": {
