@@ -1,10 +1,17 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Applications from './applications'
+import Archives from './archives'
 import Browser from './browser'
 import Duplicates from './duplicates'
+import Games from './games'
 import Inspector from './inspector'
+import Monitor from './monitor'
+import Reports from './reports'
+import Search from './search'
 import Sidebar from './sidebar'
+import Snapshots from './snapshots'
 import { BubblesView, FlameView, MindmapView, SunburstView, TreemapView } from './views'
 import { bytes, count, kindColor, percent } from './format'
 import type { DemoData } from './data'
@@ -20,6 +27,17 @@ type ViewId =
   | 'sizes'
   | 'age'
 
+type TabId =
+  | 'explore'
+  | 'search'
+  | 'archives'
+  | 'duplicates'
+  | 'applications'
+  | 'games'
+  | 'monitor'
+  | 'snapshots'
+  | 'reports'
+
 const VIEWS: { id: ViewId; label: string }[] = [
   { id: 'folders', label: 'Folders' },
   { id: 'treemap', label: 'Treemap' },
@@ -32,6 +50,19 @@ const VIEWS: { id: ViewId; label: string }[] = [
 ]
 
 const SPATIAL: ViewId[] = ['treemap', 'sunburst', 'flame', 'bubbles', 'mindmap']
+
+/** The nine sections of the desktop app. */
+const TABS: { id: TabId; label: string }[] = [
+  { id: 'explore', label: 'Explore' },
+  { id: 'search', label: 'Search' },
+  { id: 'archives', label: 'Archives' },
+  { id: 'duplicates', label: 'Duplicates' },
+  { id: 'applications', label: 'Applications' },
+  { id: 'games', label: 'Games' },
+  { id: 'monitor', label: 'Monitor' },
+  { id: 'snapshots', label: 'Snapshots' },
+  { id: 'reports', label: 'Reports' },
+]
 
 /** Arrows pointing outward — the side panels hide, the workspace widens. */
 function ExpandIcon() {
@@ -69,12 +100,13 @@ function CollapseIcon() {
  * The desktop app, running in the browser on a sample disk.
  *
  * The components are the ones the Electron app renders — the same folder
- * browser, the same eight views, the same inspector — with the CLI replaced
- * by the payloads the CLI produced for the sample disk.
+ * browser, the same eight views, the same inspector, the same nine
+ * sections — with the CLI replaced by the payloads the CLI produced for the
+ * sample disk.
  */
 export default function DemoApp({ data }: { data: DemoData }) {
   const [view, setView] = useState<ViewId>('folders')
-  const [tab, setTab] = useState<'explore' | 'duplicates'>('explore')
+  const [tab, setTab] = useState<TabId>('explore')
   const [selected, setSelected] = useState<BrowserEntry | null>(null)
   const [filter, setFilter] = useState('')
   const [focus, setFocus] = useState(false)
@@ -82,10 +114,17 @@ export default function DemoApp({ data }: { data: DemoData }) {
   const scan = data.scan
   const layout = data.layouts[view]
 
-  const workspace = useMemo(() => {
-    if (tab === 'duplicates') return <Duplicates result={data.duplicates} />
+  /** Every entry of the scan — the rows the search runs against. */
+  const entries = useMemo(() => {
+    const all: BrowserEntry[] = []
+    for (const folder of Object.values(data.folders)) {
+      for (const entry of folder.entries) all.push(entry)
+    }
+    return all
+  }, [data.folders])
 
-    return (
+  const explore = useMemo(
+    () => (
       <>
         <div className="workspace-heading">
           <h1>{scan.root.split('/').pop() || scan.root}</h1>
@@ -180,8 +219,45 @@ export default function DemoApp({ data }: { data: DemoData }) {
           </div>
         )}
       </>
-    )
-  }, [tab, view, data, scan, filter])
+    ),
+    [scan, view, data, filter],
+  )
+
+  const workspace = useMemo(() => {
+    switch (tab) {
+      case 'search':
+        return <Search entries={entries} />
+      case 'archives':
+        return <Archives archives={data.archives} />
+      case 'duplicates':
+        return <Duplicates result={data.duplicates} />
+      case 'applications':
+        return (
+          <Applications
+            applications={data.applications.applications}
+            total={data.applications.total_size}
+          />
+        )
+      case 'games':
+        return <Games libraries={data.games.libraries} total={data.games.total_size} />
+      case 'monitor':
+        return <Monitor sample={data.monitor} />
+      case 'snapshots':
+        return (
+          <Snapshots
+            scan={scan}
+            snapshots={data.snapshots}
+            comparison={data.comparison}
+          />
+        )
+      case 'reports':
+        return (
+          <Reports scan={scan} weekly={data.reports.weekly} csv={data.reports.csv} />
+        )
+      default:
+        return explore
+    }
+  }, [tab, entries, data, scan, explore])
 
   return (
     <div className="dg-app h-full">
@@ -193,33 +269,25 @@ export default function DemoApp({ data }: { data: DemoData }) {
           </div>
 
           <nav className="tabs" role="tablist" aria-label="Sections">
-            <button
-              role="tab"
-              aria-selected={tab === 'explore'}
-              className="tab"
-              onClick={() => {
-                setTab('explore')
-                setSelected(null)
-              }}
-            >
-              Explore
-            </button>
-            <button
-              role="tab"
-              aria-selected={tab === 'duplicates'}
-              className="tab"
-              onClick={() => {
-                setTab('duplicates')
-                setSelected(null)
-              }}
-            >
-              Duplicates
-            </button>
+            {TABS.map((item) => (
+              <button
+                key={item.id}
+                role="tab"
+                aria-selected={tab === item.id}
+                className="tab"
+                onClick={() => {
+                  setTab(item.id)
+                  setSelected(null)
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
           </nav>
 
           <div className="topbar-spacer" />
 
-          {tab !== 'duplicates' && (
+          {tab !== 'search' && (
             <label className="search-field">
               <span aria-hidden>⌕</span>
               <input

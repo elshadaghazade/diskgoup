@@ -3,12 +3,18 @@
 import { useEffect, useState } from 'react'
 import type {
   AgeBucket,
+  Application,
   BrowserFolder,
+  Comparison,
+  DemoArchive,
   DuplicateResponse,
+  GameLibrary,
   KindTotal,
   LayoutItem,
+  MonitorSample,
   ScanMeta,
   SizeEntry,
+  Snapshot,
   Volume,
 } from './types'
 
@@ -29,6 +35,20 @@ export type DemoData = {
   reclaimable: BrowserFolder
   layouts: Record<string, LayoutItem[]>
   duplicates: DuplicateResponse
+  /** The ZIP archives of the sample disk, with their listings. */
+  archives: DemoArchive[]
+  /** The applications of the sample machine. */
+  applications: { applications: Application[]; total_size: number }
+  /** The game libraries of the sample machine. */
+  games: { libraries: GameLibrary[]; total_size: number }
+  /** A monitor sample of the sample machine. */
+  monitor: MonitorSample
+  /** The snapshots taken of the sample disk. */
+  snapshots: Snapshot[]
+  /** The current sizes measured against the oldest snapshot. */
+  comparison: Comparison
+  /** The weekly report and the file-type report of the sample disk. */
+  reports: { weekly: string; csv: string }
 }
 
 /** Load the sample disk once, when the demo first appears. */

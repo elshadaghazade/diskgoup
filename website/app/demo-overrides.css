@@ -30,6 +30,25 @@
   flex-wrap: wrap;
 }
 
+/* The nine sections of the app do not fit on one line next to the brand and
+   the filter field. The tabs get a row of their own under the title bar, so
+   every section stays in sight instead of scrolling out of the box. */
+.dg-app .app-topbar {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 46px;
+  padding: 6px 12px 6px 16px;
+  row-gap: 6px;
+}
+
+.dg-app .tabs {
+  order: 3;
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  overflow-x: visible;
+  row-gap: 2px;
+}
+
 /* The breadcrumb and the buttons of the folder bar share one line. On a
    narrow box the buttons wrap to a second line rather than being cut off. */
 .dg-app .browser-bar {
@@ -76,8 +95,6 @@
      button on one line. The filter field drops to a line of its own rather
      than squeezing the tabs until "Duplicates" is cut in half. */
   .dg-app .app-topbar {
-    flex-wrap: wrap;
-    height: auto;
     padding: 8px 12px;
     row-gap: 8px;
   }
@@ -87,7 +104,7 @@
   }
 
   .dg-app .search-field {
-    order: 3;
+    order: 4;
     flex: 1 1 100%;
     min-width: 0;
     width: auto;
