@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const root = resolve(__dirname, '..') // electron/
-const repo = resolve(root, '..') // diskgoup-alternative/
+const repo = resolve(root, '..') // diskgoup/
 
 const isWindows = process.platform === 'win32'
 const binaryName = isWindows ? 'diskgoup.exe' : 'diskgoup'
