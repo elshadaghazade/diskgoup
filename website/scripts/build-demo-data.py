@@ -123,6 +123,7 @@ SYSTEM_APPLICATIONS = {
 def write_plist(path: Path, version: str) -> None:
     """Write the ``Info.plist`` of an app bundle."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    bundle_id = path.parent.parent.name.removesuffix(".app").replace(" ", "").lower()
     path.write_text(
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
@@ -131,7 +132,7 @@ def write_plist(path: Path, version: str) -> None:
         "\t<key>CFBundleShortVersionString</key>\n"
         f"\t<string>{version}</string>\n"
         "\t<key>CFBundleIdentifier</key>\n"
-        f"\t<string>com.sample.{path.parent.parent.name.removesuffix('.app').replace(' ', '').lower()}</string>\n"
+        f"\t<string>com.sample.{bundle_id}</string>\n"
         "</dict>\n</plist>\n",
         encoding="utf-8",
     )
@@ -179,7 +180,9 @@ def build_games(rng: random.Random) -> None:
     with a manifest per title, an Epic library under the launcher root.
     """
     for name, platform, app_id, size in GAMES:
-        root = STEAM_ROOT / "steamapps" / "common" / name if platform == "Steam" else EPIC_ROOT / name
+        root = (
+            STEAM_ROOT / "steamapps" / "common" / name if platform == "Steam" else EPIC_ROOT / name
+        )
         write_file(root / f"{name.replace(' ', '')}.bin", size * 0.82, rng)
         # The categories the CLI reports — the folders a game installation
         # carries beside its files.
@@ -203,9 +206,7 @@ def build_games(rng: random.Random) -> None:
     folders = STEAM_ROOT / "steamapps" / "libraryfolder.vdf"
     folders.parent.mkdir(parents=True, exist_ok=True)
     folders.write_text(
-        '"libraryfolders"\n{\n\t"0"\n\t{\n'
-        f'\t\t"path"\t\t"{STEAM_ROOT}"\n'
-        "\t}\n}\n",
+        f'"libraryfolders"\n{{\n\t"0"\n\t{{\n\t\t"path"\t\t"{STEAM_ROOT}"\n\t}}\n}}\n',
         encoding="utf-8",
     )
 
@@ -224,10 +225,25 @@ def zip_bytes(members: list[tuple[str, bytes]]) -> bytes:
 
 def text(rng: random.Random, lines: int) -> bytes:
     """A readable text file."""
-    words = (
-        "backup archive note invoice draft report photo export cache "
-        "project release folder client contract meeting minutes budget"
-    ).split()
+    words = [
+        "backup",
+        "archive",
+        "note",
+        "invoice",
+        "draft",
+        "report",
+        "photo",
+        "export",
+        "cache",
+        "project",
+        "release",
+        "folder",
+        "client",
+        "contract",
+        "meeting",
+        "minutes",
+        "budget",
+    ]
     lines_out = []
     for index in range(lines):
         sentence = " ".join(rng.choice(words) for _ in range(rng.randint(6, 14)))
@@ -651,9 +667,7 @@ def insert_baseline_snapshot(scan_id: int, types: list[dict[str, object]]) -> No
     does the measuring.
     """
     kinds = {str(item["kind"]): int(item["size"]) for item in types}
-    baseline = {
-        kind: int(size / GROWTH.get(kind, 1.0)) for kind, size in kinds.items() if size
-    }
+    baseline = {kind: int(size / GROWTH.get(kind, 1.0)) for kind, size in kinds.items() if size}
     total = sum(baseline.values())
 
     connection = sqlite3.connect(INDEX)
