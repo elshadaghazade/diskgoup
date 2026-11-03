@@ -64,9 +64,12 @@
       "target": [
         {
           "target": "dmg"
+        },
+        {
+          "target": "zip"
         }
       ],
-      "artifactName": "DiskGOup-macOS-${arch}.dmg",
+      "artifactName": "DiskGOup-macOS-${arch}.${ext}",
       "identity": "-",
       "hardenedRuntime": true
     },
@@ -74,6 +77,12 @@
       "target": [
         {
           "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
           "arch": [
             "x64"
           ]
@@ -86,11 +95,15 @@
       "perMachine": false,
       "allowToChangeInstallationDirectory": true
     },
+    "portable": {
+      "artifactName": "DiskGOup-Windows-portable-${arch}.exe"
+    },
     "linux": {
       "target": [
-        "AppImage"
+        "AppImage",
+        "tar.gz"
       ],
-      "artifactName": "DiskGOup-Linux-${arch}.AppImage",
+      "artifactName": "DiskGOup-Linux-${arch}.${ext}",
       "category": "Utility"
     },
     "dmg": {

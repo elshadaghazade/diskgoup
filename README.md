@@ -150,10 +150,14 @@ tag.
 |---|---|---|---|
 | **CLI** | [arm64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/diskgoup-cli-macos-arm64.tar.gz) · [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/diskgoup-cli-macos-x64.tar.gz) | [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/diskgoup-cli-linux-x64.tar.gz) · [arm64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/diskgoup-cli-linux-arm64.tar.gz) | [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/diskgoup-cli-windows-x64.zip) |
 | **Desktop app** | [arm64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-arm64.dmg) · [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-x64.dmg) | [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Linux-x64.AppImage) | [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Windows-x64.exe) |
+| **Desktop app, portable** | [arm64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-arm64.zip) · [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-x64.zip) | [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Linux-x64.tar.gz) | [x64](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Windows-portable-x64.exe) |
 
 The links always point at the newest release. The CLI binary is
 self-contained — no Python needed on the machine you run it on. The
 desktop app bundles the same binary.
+
+The **portable** row needs no installation: unpack the file wherever you
+like — a folder, a USB stick — and run it from there.
 
 The full list is on the [downloads page](https://diskgoup-docs.vercel.app/getting-started/downloads/).
 
@@ -163,6 +167,9 @@ The macOS `.dmg` and the Windows `.exe` are **not signed with a certificate
 that Apple or Microsoft trusts** — the project publishes no Developer ID and
 no code-signing certificate — so **Gatekeeper and SmartScreen check the app
 before the first launch.** The Linux AppImage is unaffected.
+
+The portable files are asked about in exactly the same way: the check
+follows the code, not the file it arrives in.
 
 The macOS app does carry a signature, so macOS does not treat the download as
 a damaged file; what it lacks is Apple's stamp of approval, which only a paid

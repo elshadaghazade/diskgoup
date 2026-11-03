@@ -43,18 +43,24 @@ jobs:
             builder: --mac --arm64
             match: electron/release/DiskGOup-macOS-arm64.dmg
             asset: DiskGOup-macOS-arm64.dmg
+            portable_match: electron/release/DiskGOup-macOS-arm64.zip
+            portable_asset: DiskGOup-macOS-arm64.zip
           - name: macOS (Intel)
             id: macos-x64
             os: macos-15-intel
             builder: --mac --x64
             match: electron/release/DiskGOup-macOS-x64.dmg
             asset: DiskGOup-macOS-x64.dmg
+            portable_match: electron/release/DiskGOup-macOS-x64.zip
+            portable_asset: DiskGOup-macOS-x64.zip
           - name: Windows (x64)
             id: windows-x64
             os: windows-2022
             builder: --win --x64
             match: electron/release/DiskGOup-Windows-x64.exe
             asset: DiskGOup-Windows-x64.exe
+            portable_match: electron/release/DiskGOup-Windows-portable-x64.exe
+            portable_asset: DiskGOup-Windows-portable-x64.exe
           - name: Linux (x64)
             id: linux-x64
             os: ubuntu-24.04
@@ -63,6 +69,8 @@ jobs:
             # artifact is renamed to the name the download links use.
             match: electron/release/DiskGOup-Linux-*.AppImage
             asset: DiskGOup-Linux-x64.AppImage
+            portable_match: electron/release/DiskGOup-Linux-*.tar.gz
+            portable_asset: DiskGOup-Linux-x64.tar.gz
 
     steps:
       - uses: actions/checkout@v7
@@ -150,10 +158,13 @@ jobs:
             echo "→ no Apple credentials — the build is signed but not notarized"
           fi
 
-      - name: Package the installer
+      - name: Package the app
         working-directory: electron
         # `--publish never`: the release workflow attaches the files itself, so
         # electron-builder must not try to publish them a second time.
+        #
+        # Every target of the platform is built in this one run: the installer
+        # and the portable one that needs no installation.
         run: |
           # "identity: -" in package.json asks electron-builder for an ad-hoc
           # signature. When a Developer ID certificate is configured, name it
@@ -172,13 +183,20 @@ jobs:
         # altogether — an unsigned app is what macOS calls "damaged".
         run: node scripts/verify-signature.mjs
 
-      - name: Give the installer its release name
-        run: python scripts/pick-artifact.py "${{ matrix.match }}" "${{ matrix.asset }}"
+      - name: Give the artifacts their release names
+        # Every row builds two files: the installer and the portable one that
+        # needs no installation. Both are renamed to the names the download
+        # links use.
+        run: |
+          python scripts/pick-artifact.py "${{ matrix.match }}" "${{ matrix.asset }}"
+          python scripts/pick-artifact.py "${{ matrix.portable_match }}" "${{ matrix.portable_asset }}"
 
       - uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.id }}
-          path: release-assets/${{ matrix.asset }}
+          path: |
+            release-assets/${{ matrix.asset }}
+            release-assets/${{ matrix.portable_asset }}
           if-no-files-found: error
 
   release:

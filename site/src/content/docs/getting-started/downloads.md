@@ -72,6 +72,30 @@ chmod +x DiskGOup-Linux-x64.AppImage
 ./DiskGOup-Linux-x64.AppImage
 ```
 
+## The desktop app, portable
+
+The files above install the app. The ones below **need no installation at
+all**: download one, unpack it wherever you like — a folder, a USB stick —
+and run it from there.
+
+| Platform | Architecture | Download | How to run it |
+|---|---|---|---|
+| macOS | Apple silicon (arm64) | [`DiskGOup-macOS-arm64.zip`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-arm64.zip) | unzip it, then double-click `DiskGOup.app` |
+| macOS | Intel (x64) | [`DiskGOup-macOS-x64.zip`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-x64.zip) | unzip it, then double-click `DiskGOup.app` |
+| Windows | x64 | [`DiskGOup-Windows-portable-x64.exe`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Windows-portable-x64.exe) | double-click it — it unpacks itself and runs |
+| Linux | x64 | [`DiskGOup-Linux-x64.tar.gz`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Linux-x64.tar.gz) | unpack it, then run `./diskgoup-electron` |
+
+The macOS app bundle carries its signature inside the archive, so it stays
+signed after unzipping and runs from any folder — copy it to a USB stick and
+it still works. The Linux archive needs no FUSE, so it also runs where the
+AppImage cannot.
+
+:::caution
+Being portable does not make the app trusted: Gatekeeper and SmartScreen
+check the **code**, not the file it arrives in, so the portable copies are
+asked about exactly like the installers — approve them the same way.
+:::
+
 ## Prefer to build it yourself?
 
 Every download above is built by the

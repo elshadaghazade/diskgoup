@@ -22,6 +22,8 @@ node_modules/
 electron/dist/
 electron/release/
 electron/out/
+# Where the release workflow stages the artifacts under their release names.
+release-assets/
 # The compiled CLI binary — rebuilt by `npm --prefix electron run build:cli`.
 electron/resources/diskgoup
 

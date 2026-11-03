@@ -163,16 +163,24 @@ npm --prefix electron run dist:mac          # arm64 + x64
 npm --prefix electron run dist:mac:arm64
 npm --prefix electron run dist:mac:x64
 npm --prefix electron run dist:win          # x64
-npm --prefix electron run dist:linux        # AppImage
+npm --prefix electron run dist:linux        # AppImage + tar.gz
 ```
 
 The output lands in `electron/release/`.
 
-| Platform | Format |
-|---|---|
-| macOS | `.dmg` |
-| Windows | NSIS installer |
-| Linux | `AppImage` |
+| Platform | Format | What it is |
+|---|---|---|
+| macOS | `.dmg` | the installer — drag the app into Applications |
+| macOS | `.zip` | portable — unzip and run `DiskGOup.app` from anywhere |
+| Windows | NSIS installer `.exe` | the installer |
+| Windows | portable `.exe` | portable — it unpacks itself and runs, no installation |
+| Linux | `AppImage` | one file, needs the executable bit |
+| Linux | `tar.gz` | portable — the unpacked folder, works without FUSE |
+
+Both kinds are built by the same `electron-builder` run: the target list of
+each platform in `electron/package.json` names them, and one `dist:*` command
+produces all of them. The artifact names carry `${ext}`, because one name
+pattern covers every target of a platform.
 
 The macOS build signs the bundle with an **ad-hoc** identity (`identity: "-"`)
 and the hardened runtime, with the entitlements in `electron/build/`. That
@@ -204,7 +212,7 @@ to push — the workflow does it.
 | [`ci.yml`](https://github.com/elshadaghazade/diskgoup/blob/main/.github/workflows/ci.yml) | on every pull request and on `main` | the CLI's tests and types, the desktop app's types, the documentation build |
 | [`release.yml`](https://github.com/elshadaghazade/diskgoup/blob/main/.github/workflows/release.yml) | on every merge into `main` | works out the version, writes it into the project, tags it and starts the two builds below |
 | [`release-cli.yml`](https://github.com/elshadaghazade/diskgoup/blob/main/.github/workflows/release-cli.yml) | started by `release.yml` | the CLI binary for macOS (arm64 + x64), Linux (x64 + arm64) and Windows (x64) |
-| [`release-desktop.yml`](https://github.com/elshadaghazade/diskgoup/blob/main/.github/workflows/release-desktop.yml) | started by `release.yml` | the desktop app: a `.dmg` for macOS, an `.exe` for Windows, an `.AppImage` for Linux |
+| [`release-desktop.yml`](https://github.com/elshadaghazade/diskgoup/blob/main/.github/workflows/release-desktop.yml) | started by `release.yml` | the desktop app: a `.dmg` and a portable `.zip` for macOS, an installer `.exe` and a portable `.exe` for Windows, an `.AppImage` and a portable `.tar.gz` for Linux |
 
 The steps, in short:
 
