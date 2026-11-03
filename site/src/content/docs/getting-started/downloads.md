@@ -9,7 +9,7 @@ project's own CI and attached to the
 tag.
 
 <!-- release:start -->
-**Latest release: `v0.3.2`** · [the release notes →](https://github.com/elshadaghazade/diskgoup/releases/tag/v0.3.2)
+**Latest release: `v0.4.0`** · [the release notes →](https://github.com/elshadaghazade/diskgoup/releases/tag/v0.4.0)
 <!-- release:end -->
 
 The links below always point at the **newest** release — there is nothing to
