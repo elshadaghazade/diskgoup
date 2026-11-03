@@ -1,4 +1,4 @@
-import { Apple, Download, Monitor, ShieldAlert, Terminal } from 'lucide-react'
+import { Apple, Download, Monitor, Package, ShieldAlert, Terminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
@@ -12,6 +12,10 @@ const PLATFORMS = [
       { label: 'Apple silicon', file: 'DiskGOup-macOS-arm64.dmg' },
       { label: 'Intel', file: 'DiskGOup-macOS-x64.dmg' },
     ],
+    portable: [
+      { label: 'Apple silicon', file: 'DiskGOup-macOS-arm64.zip' },
+      { label: 'Intel', file: 'DiskGOup-macOS-x64.zip' },
+    ],
     cli: [
       { label: 'Apple silicon', file: 'diskgoup-cli-macos-arm64.tar.gz' },
       { label: 'Intel', file: 'diskgoup-cli-macos-x64.tar.gz' },
@@ -22,6 +26,7 @@ const PLATFORMS = [
     name: 'Windows',
     icon: Monitor,
     desktop: [{ label: 'x64', file: 'DiskGOup-Windows-x64.exe' }],
+    portable: [{ label: 'x64', file: 'DiskGOup-Windows-portable-x64.exe' }],
     cli: [{ label: 'x64', file: 'diskgoup-cli-windows-x64.zip' }],
     unsigned: true,
   },
@@ -29,6 +34,7 @@ const PLATFORMS = [
     name: 'Linux',
     icon: Terminal,
     desktop: [{ label: 'x64', file: 'DiskGOup-Linux-x64.AppImage' }],
+    portable: [{ label: 'x64', file: 'DiskGOup-Linux-x64.tar.gz' }],
     cli: [
       { label: 'x64', file: 'diskgoup-cli-linux-x64.tar.gz' },
       { label: 'arm64', file: 'diskgoup-cli-linux-arm64.tar.gz' },
@@ -49,7 +55,9 @@ export default function Downloads() {
           <p className="mt-4 text-base leading-relaxed text-muted">
             Every release ships a standalone CLI binary and the desktop app, built by the
             project&rsquo;s own CI. The CLI needs no Python on your machine, and the app bundles
-            the very same binary — so it is self-contained too.
+            the very same binary — so it is self-contained too. Each platform also gets a{' '}
+            <strong className="font-medium text-ink">portable</strong> build: no installer, no
+            admin rights — unpack it and run it from any folder, or from a USB stick.
           </p>
         </div>
 
@@ -82,6 +90,30 @@ export default function Downloads() {
                     </Button>
                   ))}
                 </div>
+              </div>
+
+              <div className="mt-6">
+                <div className="text-xs font-medium uppercase tracking-wider text-faint">
+                  Portable — no install
+                </div>
+                <div className="mt-3 flex flex-col gap-2">
+                  {platform.portable.map((item) => (
+                    <a
+                      key={item.file}
+                      href={`${RELEASES}/${item.file}`}
+                      rel="noreferrer"
+                      target="_blank"
+                      className="flex items-center gap-2 rounded-full px-1 text-[13px] text-muted transition-colors hover:text-accent"
+                    >
+                      <Package className="size-3.5" />
+                      {item.label}
+                      <span className="truncate text-[11px] text-faint">{item.file}</span>
+                    </a>
+                  ))}
+                </div>
+                <p className="mt-2 px-1 text-[11px] leading-relaxed text-faint">
+                  Unpack it and run the app from wherever you like — a folder, a USB stick.
+                </p>
               </div>
 
               <div className="mt-6">
@@ -134,6 +166,8 @@ export default function Downloads() {
               <strong className="text-ink">Open</strong>; on Windows, choose{' '}
               <strong className="text-ink">More info</strong> and then{' '}
               <strong className="text-ink">Run anyway</strong>. The Linux AppImage is unaffected.
+              The portable copies are asked about in exactly the same way — the check follows
+              the code, not the file it arrives in.
             </p>
             <p>
               If you would rather not allow an unsigned binary at all, two other roads lead to the

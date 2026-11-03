@@ -113,9 +113,9 @@ In order:
 ### Release builds
 
 ```bash
-npm --prefix electron run dist:mac        # DMG, arm64 + x64
-npm --prefix electron run dist:win        # NSIS installer, x64
-npm --prefix electron run dist:linux      # AppImage
+npm --prefix electron run dist:mac        # DMG + portable zip, arm64 + x64
+npm --prefix electron run dist:win        # NSIS installer + portable exe, x64
+npm --prefix electron run dist:linux      # AppImage + portable tar.gz
 ```
 
 See [Building and releasing](/development/building/) for the full pipeline.

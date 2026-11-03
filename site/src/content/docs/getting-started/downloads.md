@@ -46,15 +46,21 @@ sha256sum --check checksums-cli.txt
 
 ## The desktop app
 
-The app bundles the CLI, so the installer is self-contained — it does not
-need Python on the target machine.
+The app bundles the CLI, so every build is self-contained — it does not
+need Python on the target machine. Two kinds are published for each
+platform: the **installer**, and the **portable** copy, which needs no
+installation at all.
 
-| Platform | Architecture | Download |
-|---|---|---|
-| macOS | Apple silicon (arm64) | [`DiskGOup-macOS-arm64.dmg`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-arm64.dmg) |
-| macOS | Intel (x64) | [`DiskGOup-macOS-x64.dmg`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-x64.dmg) |
-| Windows | x64 | [`DiskGOup-Windows-x64.exe`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Windows-x64.exe) |
-| Linux | x64 | [`DiskGOup-Linux-x64.AppImage`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Linux-x64.AppImage) |
+| Platform | Architecture | Format | Download | How to run it |
+|---|---|---|---|---|
+| macOS | Apple silicon (arm64) | Installer | [`DiskGOup-macOS-arm64.dmg`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-arm64.dmg) | double-click it, then drag `DiskGOup.app` into Applications |
+| macOS | Intel (x64) | Installer | [`DiskGOup-macOS-x64.dmg`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-x64.dmg) | double-click it, then drag `DiskGOup.app` into Applications |
+| macOS | Apple silicon (arm64) | Portable | [`DiskGOup-macOS-arm64.zip`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-arm64.zip) | unzip it, then double-click `DiskGOup.app` |
+| macOS | Intel (x64) | Portable | [`DiskGOup-macOS-x64.zip`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-x64.zip) | unzip it, then double-click `DiskGOup.app` |
+| Windows | x64 | Installer | [`DiskGOup-Windows-x64.exe`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Windows-x64.exe) | double-click it and follow the installer |
+| Windows | x64 | Portable | [`DiskGOup-Windows-portable-x64.exe`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Windows-portable-x64.exe) | double-click it — it unpacks itself and runs |
+| Linux | x64 | Installer | [`DiskGOup-Linux-x64.AppImage`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Linux-x64.AppImage) | make it executable, then run it |
+| Linux | x64 | Portable | [`DiskGOup-Linux-x64.tar.gz`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Linux-x64.tar.gz) | unpack it, then run `./diskgoup-electron` |
 
 :::caution
 The macOS build is signed, but with an **ad-hoc** signature rather than a
@@ -72,18 +78,10 @@ chmod +x DiskGOup-Linux-x64.AppImage
 ./DiskGOup-Linux-x64.AppImage
 ```
 
-## The desktop app, portable
+### The portable builds
 
-The files above install the app. The ones below **need no installation at
-all**: download one, unpack it wherever you like — a folder, a USB stick —
-and run it from there.
-
-| Platform | Architecture | Download | How to run it |
-|---|---|---|---|
-| macOS | Apple silicon (arm64) | [`DiskGOup-macOS-arm64.zip`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-arm64.zip) | unzip it, then double-click `DiskGOup.app` |
-| macOS | Intel (x64) | [`DiskGOup-macOS-x64.zip`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-macOS-x64.zip) | unzip it, then double-click `DiskGOup.app` |
-| Windows | x64 | [`DiskGOup-Windows-portable-x64.exe`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Windows-portable-x64.exe) | double-click it — it unpacks itself and runs |
-| Linux | x64 | [`DiskGOup-Linux-x64.tar.gz`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Linux-x64.tar.gz) | unpack it, then run `./diskgoup-electron` |
+The portable rows need no installation: download one, unpack it wherever you
+like — a folder, a USB stick — and run it from there.
 
 The macOS app bundle carries its signature inside the archive, so it stays
 signed after unzipping and runs from any folder — copy it to a USB stick and

@@ -306,14 +306,15 @@ npm --prefix electron start      # run the production build
 ### Installers
 
 ```bash
-npm --prefix electron run dist:mac      # .dmg (arm64 + x64)
-npm --prefix electron run dist:win      # .exe (NSIS installer)
-npm --prefix electron run dist:linux    # AppImage
+npm --prefix electron run dist:mac      # .dmg + portable .zip (arm64 + x64)
+npm --prefix electron run dist:win      # .exe installer + portable .exe (x64)
+npm --prefix electron run dist:linux    # AppImage + portable .tar.gz
 ```
 
 The installers land in `electron/release/`. The CLI binary is bundled inside
 the app, so an installer is self-contained — it does not need Python on the
-target machine.
+target machine. Each platform also produces a **portable** build next to the
+installer: unpack it and run it from any folder, with no installation.
 
 ### The CLI on its own
 

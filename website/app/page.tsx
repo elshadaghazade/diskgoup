@@ -35,7 +35,8 @@ const FAQ = [
     answer:
       'The project publishes no signing certificate, so the macOS .dmg and the Windows .exe are ' +
       'unsigned and not notarized. Whether to allow an unsigned build on your own machine is your ' +
-      'decision, and your responsibility.',
+      'decision, and your responsibility. The portable copies are asked about in the same way — ' +
+      'the check follows the code, not the file it arrives in.',
   },
   {
     question: 'Can I use it on a server or in a script?',

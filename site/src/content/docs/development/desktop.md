@@ -166,9 +166,9 @@ npm --prefix electron run dist:linux
 
 | Platform | Output |
 |---|---|
-| macOS | A `.dmg` for `arm64` and `x64`. |
-| Windows | An NSIS installer for `x64`. |
-| Linux | An `AppImage`. |
+| macOS | A `.dmg` installer and a portable `.zip` for `arm64` and `x64`. |
+| Windows | An NSIS installer and a portable `.exe` for `x64`. |
+| Linux | An `AppImage` and a portable `.tar.gz` for `x64`. |
 
 The CLI binary travels with the app as an `extraResource`, and the resolver
 finds it at the packaged path first.
