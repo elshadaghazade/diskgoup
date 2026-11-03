@@ -107,20 +107,53 @@ jobs:
           npm --prefix electron run build:cli
           npm --prefix electron run build:assets
 
+      - name: Import the Developer ID certificate
+        if: runner.os == 'macOS'
+        # A Developer ID certificate, when the repository has one, replaces the
+        # ad-hoc signature the build uses by default.
+        #
+        # The variables below must not merely be *empty* when the secrets are
+        # absent: electron-builder reads CSC_LINK as the path of a
+        # certificate, and an empty path resolves to the working directory —
+        # which is not a file, and the build dies with "not a file". So they
+        # are only written to the environment when there is something to
+        # write.
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$MACOS_CERTIFICATE" ]; then
+            echo "→ no Developer ID certificate — the build signs ad-hoc"
+            exit 0
+          fi
+
+          # The secret is the .p12 as base64. It goes into a file rather than
+          # into CSC_LINK itself, so that electron-builder reads it as the
+          # file it is.
+          python -c "import base64, os, pathlib; data = ''.join(os.environ['MACOS_CERTIFICATE'].split()); data += '=' * (-len(data) % 4); pathlib.Path(os.environ['RUNNER_TEMP'], 'certificate.p12').write_bytes(base64.b64decode(data))"
+          echo "CSC_LINK=$RUNNER_TEMP/certificate.p12" >> "$GITHUB_ENV"
+          if [ -n "$MACOS_CERTIFICATE_PASSWORD" ]; then
+            echo "CSC_KEY_PASSWORD=$MACOS_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
+          fi
+
+          # Notarization needs the Apple ID, its app-specific password and the
+          # team ID. All three or none — electron-builder throws when one of
+          # them is missing.
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "APPLE_ID=$APPLE_ID" >> "$GITHUB_ENV"
+            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
+          else
+            echo "→ no Apple credentials — the build is signed but not notarized"
+          fi
+
       - name: Package the installer
         working-directory: electron
         # `--publish never`: the release workflow attaches the files itself, so
         # electron-builder must not try to publish them a second time.
-        env:
-          # A Developer ID certificate, when the repository has one, replaces
-          # the ad-hoc signature the build uses by default. These are empty
-          # until the secrets are set, and then the build simply keeps signing
-          # ad-hoc — nothing else changes.
-          CSC_LINK: ${{ startsWith(matrix.os, 'macos-') && secrets.MACOS_CERTIFICATE || '' }}
-          CSC_KEY_PASSWORD: ${{ startsWith(matrix.os, 'macos-') && secrets.MACOS_CERTIFICATE_PASSWORD || '' }}
-          APPLE_ID: ${{ startsWith(matrix.os, 'macos-') && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ startsWith(matrix.os, 'macos-') && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ startsWith(matrix.os, 'macos-') && secrets.APPLE_TEAM_ID || '' }}
         run: |
           # "identity: -" in package.json asks electron-builder for an ad-hoc
           # signature. When a Developer ID certificate is configured, name it
