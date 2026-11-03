@@ -1,6 +1,6 @@
 [project]
 name = "diskgoup"
-version = "0.3.0"
+version = "0.3.1"
 description = "Cross-platform disk space analyzer and duplicate file finder."
 readme = "README.md"
 requires-python = ">=3.12"
