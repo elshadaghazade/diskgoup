@@ -174,9 +174,25 @@ The output lands in `electron/release/`.
 | Windows | NSIS installer |
 | Linux | `AppImage` |
 
-The macOS build is configured with `identity: "-"`, `hardenedRuntime: false`
-and `gatekeeperAssess: false` — it is not signed or notarized, so Gatekeeper
-will complain on another machine. Sign it before shipping to anyone else.
+The macOS build signs the bundle with an **ad-hoc** identity (`identity: "-"`)
+and the hardened runtime, with the entitlements in `electron/build/`. That
+seals the app — so it is not a damaged file — but it proves nothing about who
+built it, so Gatekeeper still asks on another machine. The packaging fails if
+the signature does not verify, so a broken seal can never be shipped.
+
+To sign it properly, add these repository secrets; the release workflow picks
+them up on its own:
+
+| Secret | What it is |
+|---|---|
+| `MACOS_CERTIFICATE` | the `Developer ID Application` certificate (`.p12`), base64-encoded |
+| `MACOS_CERTIFICATE_PASSWORD` | that certificate's password |
+| `APPLE_ID` | the Apple ID that owns the team |
+| `APPLE_APP_SPECIFIC_PASSWORD` | an app-specific password for that Apple ID |
+| `APPLE_TEAM_ID` | the 10-character team ID |
+
+With them in place the app is signed with the Developer ID and notarized
+before the `.dmg` is built, and macOS opens it without asking anything.
 
 ## Releasing
 
@@ -222,8 +238,9 @@ git push origin v0.3.0
 ```
 
 :::caution
-The macOS and Windows installers are **unsigned**. Gatekeeper and SmartScreen
-will warn on a machine that has never seen them.
+The Windows installer is **unsigned**, so SmartScreen warns on a machine that
+has never seen it. The macOS app is signed, but ad-hoc rather than with a
+Developer ID, so Gatekeeper asks the user to approve it once.
 :::
 
 ## The repository layout
@@ -238,7 +255,7 @@ diskgoup/
 │   └── util/              formatting helpers
 ├── electron/              the Electron main process
 │   ├── src/               main.ts, backend.ts, preload.ts
-│   └── scripts/           build-cli.mjs, build-assets.mjs
+│   └── scripts/           build-cli.mjs, build-assets.mjs, verify-signature.mjs
 ├── ui/                    the React renderer
 │   ├── src/components/    one per tab
 │   └── src/lib/           the API client and the shared types

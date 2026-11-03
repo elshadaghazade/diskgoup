@@ -156,22 +156,27 @@ desktop app bundles the same binary.
 
 The full list is on the [downloads page](https://diskgoup.vercel.app/getting-started/downloads/).
 
-### Unsigned installers
+### Installers macOS and Windows will ask about
 
-The macOS `.dmg` and the Windows `.exe` are **not code-signed and not
-notarized** — the project publishes no certificate — so **Gatekeeper and
-SmartScreen warn on the first launch.** The Linux AppImage is unaffected.
+The macOS `.dmg` and the Windows `.exe` are **not signed with a certificate
+that Apple or Microsoft trusts** — the project publishes no Developer ID and
+no code-signing certificate — so **Gatekeeper and SmartScreen check the app
+before the first launch.** The Linux AppImage is unaffected.
 
-That warning is the operating system asking, not the app failing. Whether to
-allow an unsigned build on your own machine is your decision, and your
+The macOS app does carry a signature, so macOS does not treat the download as
+a damaged file; what it lacks is Apple's stamp of approval, which only a paid
+Developer ID buys. Gatekeeper still asks, and you say yes once.
+
+That check is the operating system asking, not the app failing. Whether to
+allow such a build on your own machine is your decision, and your
 responsibility.
 
 | Platform | What you see | What to do |
 |---|---|---|
-| macOS | "cannot be opened because the developer cannot be verified" | right-click the app in the mounted `.dmg` → **Open** → **Open**, or **System Settings → Privacy & Security → Open Anyway** |
+| macOS | "cannot be opened because the developer cannot be verified", or "App is damaged" | **System Settings → Privacy & Security → Open Anyway**, then **Open** — [Apple's own route](https://support.apple.com/en-us/102445) |
 | Windows | "Windows protected your PC" | **More info** → **Run anyway** |
 
-If you would rather not allow an unsigned binary at all, two other roads lead
+If you would rather not allow such a build at all, two other roads lead
 to the same program:
 
 - **Verify the download.** Every release ships the SHA-256 of each file in

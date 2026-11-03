@@ -111,7 +111,33 @@ jobs:
         working-directory: electron
         # `--publish never`: the release workflow attaches the files itself, so
         # electron-builder must not try to publish them a second time.
-        run: npx electron-builder ${{ matrix.builder }} --publish never
+        env:
+          # A Developer ID certificate, when the repository has one, replaces
+          # the ad-hoc signature the build uses by default. These are empty
+          # until the secrets are set, and then the build simply keeps signing
+          # ad-hoc — nothing else changes.
+          CSC_LINK: ${{ startsWith(matrix.os, 'macos-') && secrets.MACOS_CERTIFICATE || '' }}
+          CSC_KEY_PASSWORD: ${{ startsWith(matrix.os, 'macos-') && secrets.MACOS_CERTIFICATE_PASSWORD || '' }}
+          APPLE_ID: ${{ startsWith(matrix.os, 'macos-') && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ startsWith(matrix.os, 'macos-') && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ startsWith(matrix.os, 'macos-') && secrets.APPLE_TEAM_ID || '' }}
+        run: |
+          # "identity: -" in package.json asks electron-builder for an ad-hoc
+          # signature. When a Developer ID certificate is configured, name it
+          # instead, so the release is signed with it and can be notarized.
+          if [ -n "${CSC_LINK:-}" ]; then
+            npx electron-builder ${{ matrix.builder }} --config.mac.identity='Developer ID Application' --publish never
+          else
+            npx electron-builder ${{ matrix.builder }} --publish never
+          fi
+
+      - name: Verify the macOS signature
+        if: runner.os == 'macOS'
+        working-directory: electron
+        # The build signs the bundle and the afterSign hook checks it. This
+        # step is the gate that survives a build in which signing was skipped
+        # altogether — an unsigned app is what macOS calls "damaged".
+        run: node scripts/verify-signature.mjs
 
       - name: Give the installer its release name
         run: python scripts/pick-artifact.py "${{ matrix.match }}" "${{ matrix.asset }}"
