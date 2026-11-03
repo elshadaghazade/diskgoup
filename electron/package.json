@@ -23,6 +23,7 @@
     "dev:electron": "tsc -w",
     "dev": "npm run build:electron && npm run build:cli && cross-env DISKGOUP_ELECTRON_DEV=1 electron .",
     "start": "electron .",
+    "verify:signature": "node scripts/verify-signature.mjs",
     "dist:mac": "npm run build && electron-builder --mac --arm64 --x64 --publish never",
     "dist:mac:arm64": "npm run build && electron-builder --mac --arm64 --publish never",
     "dist:mac:x64": "npm run build && electron-builder --mac --x64 --publish never",
@@ -33,12 +34,13 @@
   "devDependencies": {
     "cross-env": "^7.0.3",
     "electron": "^33.2.0",
-    "electron-builder": "^25.1.8",
+    "electron-builder": "^26.18.0",
     "typescript": "^5.6.3"
   },
   "build": {
     "appId": "app.diskgoup.desktop",
     "productName": "DiskGOup",
+    "afterSign": "./scripts/verify-signature.mjs",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -66,8 +68,7 @@
       ],
       "artifactName": "DiskGOup-macOS-${arch}.dmg",
       "identity": "-",
-      "hardenedRuntime": false,
-      "gatekeeperAssess": false
+      "hardenedRuntime": true
     },
     "win": {
       "target": [

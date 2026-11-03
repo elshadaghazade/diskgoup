@@ -57,10 +57,12 @@ need Python on the target machine.
 | Linux | x64 | [`DiskGOup-Linux-x64.AppImage`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Linux-x64.AppImage) |
 
 :::caution
-The macOS build is **not signed and not notarized**. The first launch is
-therefore blocked by Gatekeeper — open it with **right-click → Open**, or
-follow [these steps](https://support.apple.com/guide/mac-help/open-a-disk-image-mac-mhla3qjn3c4/mac).
-The Windows build is unsigned too, so SmartScreen may warn about it.
+The macOS build is signed, but with an **ad-hoc** signature rather than a
+Developer ID, so it is not notarized and Gatekeeper asks you to approve it on
+the first launch: **System Settings → Privacy & Security → Open Anyway**, then
+**Open** — [Apple's own route](https://support.apple.com/en-us/102445).
+
+The Windows build is unsigned, so SmartScreen may warn about it.
 :::
 
 On Linux, make the AppImage executable before running it:
