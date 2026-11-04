@@ -63,12 +63,13 @@ installation at all.
 | Linux | x64 | Portable | [`DiskGOup-Linux-x64.tar.gz`](https://github.com/elshadaghazade/diskgoup/releases/latest/download/DiskGOup-Linux-x64.tar.gz) | unpack it, then run `./diskgoup-electron` |
 
 :::caution
-The macOS build is signed, but with an **ad-hoc** signature rather than a
-Developer ID, so it is not notarized and Gatekeeper asks you to approve it on
-the first launch: **System Settings → Privacy & Security → Open Anyway**, then
-**Open** — [Apple's own route](https://support.apple.com/en-us/102445).
+The macOS build is signed with a **Developer ID** and notarized by Apple, so
+the first launch shows the ordinary *"downloaded from the Internet"* dialog and
+asks you to choose **Open**. Nothing else is asked of you.
 
-The Windows build is unsigned, so SmartScreen may warn about it.
+The Windows build carries no code-signing certificate, so SmartScreen may warn
+on a machine that has never seen it — choose **More info** and then **Run
+anyway**.
 :::
 
 On Linux, make the AppImage executable before running it:
@@ -89,9 +90,10 @@ it still works. The Linux archive needs no FUSE, so it also runs where the
 AppImage cannot.
 
 :::caution
-Being portable does not make the app trusted: Gatekeeper and SmartScreen
-check the **code**, not the file it arrives in, so the portable copies are
-asked about exactly like the installers — approve them the same way.
+Being portable does not make the app trusted — Gatekeeper and SmartScreen
+check the **code**, not the file it arrives in. But the code is the same code:
+the macOS portable build carries the same signature and the same notarization
+as the installer, so it is asked about in exactly the same way.
 :::
 
 ## Prefer to build it yourself?

@@ -1,4 +1,4 @@
-import { Apple, Download, Monitor, Package, ShieldAlert, Terminal } from 'lucide-react'
+import { Apple, Download, Monitor, Package, ShieldAlert, ShieldCheck, Terminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
@@ -20,7 +20,7 @@ const PLATFORMS = [
       { label: 'Apple silicon', file: 'diskgoup-cli-macos-arm64.tar.gz' },
       { label: 'Intel', file: 'diskgoup-cli-macos-x64.tar.gz' },
     ],
-    unsigned: true,
+    signed: true,
   },
   {
     name: 'Windows',
@@ -142,6 +142,11 @@ export default function Downloads() {
                   <ShieldAlert className="size-3.5 text-accent" />
                   Unsigned build
                 </Badge>
+              ) : platform.signed ? (
+                <Badge variant="outline" className="self-start">
+                  <ShieldCheck className="size-3.5 text-accent" />
+                  Signed &amp; notarized
+                </Badge>
               ) : (
                 <Badge variant="outline" className="self-start">
                   No gatekeeper warning
@@ -154,20 +159,24 @@ export default function Downloads() {
         <div className="mt-6 rounded-2xl border border-accent/25 bg-accent/[0.06] p-6">
           <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
             <ShieldAlert className="size-4 text-accent" />
-            The macOS and Windows builds are not code-signed
+            What macOS and Windows ask about
           </h3>
           <div className="mt-3 grid gap-6 text-sm leading-relaxed text-muted lg:grid-cols-2">
             <p>
-              The project publishes no signing certificate, so Gatekeeper and SmartScreen warn on
-              the first launch. The warning is the operating system asking, not the app failing —
-              and whether to allow an unsigned build on your own machine is your decision, and your
-              responsibility. On macOS, right-click the app in the mounted{' '}
-              <code className="font-mono text-[13px] text-accent">.dmg</code> and choose{' '}
-              <strong className="text-ink">Open</strong>; on Windows, choose{' '}
+              The macOS app is signed with a <strong className="text-ink">Developer ID</strong> and
+              notarized by Apple, so the first launch shows the ordinary &ldquo;downloaded from the
+              Internet&rdquo; dialog and asks you to choose{' '}
+              <strong className="text-ink">Open</strong> — the same prompt every signed app shows.
+              The portable copies carry the same signature, so they are asked about in exactly the
+              same way: the check follows the code, not the file it arrives in.
+            </p>
+            <p>
+              The Windows installer carries no code-signing certificate, so SmartScreen may warn on
+              a machine that has never seen it — choose{' '}
               <strong className="text-ink">More info</strong> and then{' '}
-              <strong className="text-ink">Run anyway</strong>. The Linux AppImage is unaffected.
-              The portable copies are asked about in exactly the same way — the check follows
-              the code, not the file it arrives in.
+              <strong className="text-ink">Run anyway</strong>. Whether to allow an unsigned build
+              on your own machine is your decision, and your responsibility. The Linux AppImage is
+              unaffected.
             </p>
             <p>
               If you would rather not allow an unsigned binary at all, two other roads lead to the
