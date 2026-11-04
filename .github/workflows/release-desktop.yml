@@ -149,6 +149,32 @@ jobs:
           # file it is.
           python -c "import base64, os, pathlib; data = ''.join(os.environ['MACOS_CERTIFICATE'].split()); data += '=' * (-len(data) % 4); pathlib.Path(os.environ['RUNNER_TEMP'], 'certificate.p12').write_bytes(base64.b64decode(data))"
 
+          # Are the Apple credentials good?
+          #
+          # Notarization needs them, and a wrong password is the kind of
+          # mistake that costs a whole build to discover. Asking Apple
+          # costs a second, so it is asked here — before anything is packed,
+          # signed or published.
+          #
+          # The check needs all three: the Apple ID, its app-specific
+          # password and the team. When they are not all there, there is
+          # nothing to ask and the certificate check below says what is
+          # missing.
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            if xcrun notarytool history --apple-id "$APPLE_ID" \
+                 --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                 --team-id "$APPLE_TEAM_ID" >/dev/null 2>"$RUNNER_TEMP/notary.log"; then
+              echo "→ Apple accepts the credentials"
+            else
+              echo "::error::Apple does not accept the credentials — nothing is published"
+              tr '\n' ' ' < "$RUNNER_TEMP/notary.log"
+              echo
+              echo "  The password must be an app-specific password, not the Apple ID password:"
+              echo "  appleid.apple.com → Sign-In and Security → App-Specific Passwords → Generate."
+              exit 1
+            fi
+          fi
+
           # Which certificate is this, really?
           #
           # electron-builder signs with an identity called "Developer ID
