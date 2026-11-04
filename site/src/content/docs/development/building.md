@@ -204,8 +204,13 @@ declares the environment, and the release job declares it:
 refuses one that is not a `Developer ID Application` certificate: the Apple
 Distribution certificate — the one the App Store uses — cannot be notarized
 outside the App Store, and an app signed with it is refused by Gatekeeper all
-the same. The build checks the name of the certificate too, so a wrong one
-stops the release instead of shipping an app macOS will not open.
+the same.
+
+The build checks both of those before it packs anything. It asks Apple
+whether the credentials are good — a second, against a wrong app-specific
+password that would otherwise cost a whole build — and it looks at the name
+of the certificate. A wrong one stops the release with the reason, instead
+of shipping an app macOS will not open.
 
 Without the certificate the build falls back to an **ad-hoc** signature
 (`identity: "-"`), which seals the app but proves nothing about who built it.
