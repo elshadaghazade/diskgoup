@@ -206,6 +206,16 @@ Distribution certificate — the one the App Store uses — cannot be notarized
 outside the App Store, and an app signed with it is refused by Gatekeeper all
 the same.
 
+The certificate comes from Apple, in one of two ways:
+
+| Way | What to do |
+|---|---|
+| Xcode | Settings → Accounts → the team → Manage Certificates → **+** → Developer ID Application. Then export it from Keychain Access, with its private key, as a `.p12`. |
+| The developer portal | `scripts/create-devid-csr.sh <folder>` writes a request; upload it at developer.apple.com → Certificates → **+** → Developer ID Application, download the certificate, and turn the certificate and the key into a `.p12` — the script's header says how. |
+
+Either way, the `.p12` goes into the environment with
+`scripts/upload-macos-cert.sh <file.p12>`. It never goes into the repository.
+
 The build checks both of those before it packs anything. It asks Apple
 whether the credentials are good — a second, against a wrong app-specific
 password that would otherwise cost a whole build — and it looks at the name

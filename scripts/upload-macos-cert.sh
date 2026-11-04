@@ -44,10 +44,16 @@ trap 'rm -rf "$work"' EXIT
 
 if ! openssl pkcs12 -in "$p12" -nokeys -passin "pass:$password" \
      -out "$work/certificates.pem" 2>"$work/log"; then
-  echo "✗ the certificate could not be read — is the password right?" >&2
-  tr '\n' ' ' < "$work/log" >&2
-  echo >&2
-  exit 1
+  # A file exported from Keychain Access or from the Apple portal is often
+  # encrypted with RC2, which OpenSSL 3 only reads with its legacy provider.
+  cp "$work/log" "$work/log-plain"
+  if ! openssl pkcs12 -legacy -in "$p12" -nokeys -passin "pass:$password" \
+       -out "$work/certificates.pem" 2>"$work/log"; then
+    echo "✗ the certificate could not be read — is the password right?" >&2
+    tr '\n' ' ' < "$work/log-plain" >&2
+    echo >&2
+    exit 1
+  fi
 fi
 
 subjects="$(openssl crl2pkcs7 -nocrl -certfile "$work/certificates.pem" 2>/dev/null \
