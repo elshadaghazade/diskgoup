@@ -215,7 +215,8 @@ jobs:
               echo "::error::the certificate in the environment is not a Developer ID Application certificate — nothing is published"
               printf '%s\n' "$subjects" | sed 's/^/  /'
               echo "  Only a Developer ID Application certificate can be notarized outside the App Store."
-              echo "  The Apple Distribution certificate — the one the App Store uses — cannot."
+              echo "  The Apple Distribution certificate — the one the App Store uses — cannot,"
+              echo "  and the Apple Development one is for development builds only."
               echo "  Create the right one in Xcode (Settings → Accounts → the team →"
               echo "  Manage Certificates → +) and put it into the environment with"
               echo "  scripts/upload-macos-cert.sh."

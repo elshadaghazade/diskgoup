@@ -203,8 +203,10 @@ declares the environment, and the release job declares it:
 `scripts/upload-macos-cert.sh` puts a certificate into that environment and
 refuses one that is not a `Developer ID Application` certificate: the Apple
 Distribution certificate — the one the App Store uses — cannot be notarized
-outside the App Store, and an app signed with it is refused by Gatekeeper all
-the same.
+outside the App Store, and the Apple Development one is for development
+builds only. An app signed with either is refused by Gatekeeper all the same.
+With `--check` the script only says what a certificate is, without uploading
+anything.
 
 The certificate comes from Apple, in one of two ways:
 

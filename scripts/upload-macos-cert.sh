@@ -3,6 +3,10 @@
 #
 #   scripts/upload-macos-cert.sh <certificate.p12>
 #   scripts/upload-macos-cert.sh <certificate.p12> <password>
+#   scripts/upload-macos-cert.sh --check <certificate.p12>
+#
+# With --check the script only says what the certificate is — nothing is
+# uploaded, so it can be asked about a certificate that is not ready yet.
 #
 # Without the password on the command line the script asks for it, without
 # echoing it: a password that sits in the shell history, or in the process
@@ -26,7 +30,13 @@
 
 set -euo pipefail
 
-p12="${1:?usage: upload-macos-cert.sh <certificate.p12> [password]}"
+check_only=0
+if [ "${1:-}" = "--check" ]; then
+  check_only=1
+  shift
+fi
+
+p12="${1:?usage: upload-macos-cert.sh [--check] <certificate.p12> [password]}"
 password="${2:-}"
 
 if [ ! -f "$p12" ]; then
@@ -64,9 +74,11 @@ case "$subjects" in
   *)
     echo "✗ this is not a Developer ID Application certificate:" >&2
     printf '%s\n' "$subjects" | sed 's/^/  /' >&2
-    echo "  The Apple Distribution certificate — the one the App Store uses —" >&2
-    echo "  cannot be notarized outside the App Store, and an app signed with" >&2
-    echo "  it is blocked by Gatekeeper all the same." >&2
+    echo "  Two certificates look like it and cannot do the job. The Apple" >&2
+    echo "  Distribution one — the App Store's — cannot be notarized outside" >&2
+    echo "  the App Store, and the Apple Development one is for development" >&2
+    echo "  builds only. An app signed with either is blocked by Gatekeeper" >&2
+    echo "  all the same." >&2
     echo "  Create the right one in Xcode: Settings → Accounts → the team →" >&2
     echo "  Manage Certificates → + → Developer ID Application." >&2
     exit 1
@@ -74,6 +86,12 @@ case "$subjects" in
 esac
 
 echo "→ $subjects"
+
+if [ "$check_only" -eq 1 ]; then
+  echo "✓ it is a Developer ID Application certificate — the build can use it"
+  echo "  nothing was uploaded; run the script without --check to upload it"
+  exit 0
+fi
 
 # The secret is the .p12 as base64 — one line, without the line breaks the
 # encoder adds by default.
