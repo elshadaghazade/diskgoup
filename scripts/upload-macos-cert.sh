@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Put a Developer ID Application certificate into the repository environment.
 #
+#   scripts/upload-macos-cert.sh <certificate.p12>
 #   scripts/upload-macos-cert.sh <certificate.p12> <password>
+#
+# Without the password on the command line the script asks for it, without
+# echoing it: a password that sits in the shell history, or in the process
+# list, is a password that leaks.
 #
 # The certificate is what makes macOS open the app without calling it
 # damaged: it is signed with it, notarized by Apple and stapled to the
@@ -21,12 +26,17 @@
 
 set -euo pipefail
 
-p12="${1:?usage: upload-macos-cert.sh <certificate.p12> <password>}"
-password="${2:?usage: upload-macos-cert.sh <certificate.p12> <password>}"
+p12="${1:?usage: upload-macos-cert.sh <certificate.p12> [password]}"
+password="${2:-}"
 
 if [ ! -f "$p12" ]; then
   echo "✗ $p12 is not a file" >&2
   exit 1
+fi
+
+if [ -z "$password" ]; then
+  read -r -s -p "the password of $p12: " password
+  echo
 fi
 
 work="$(mktemp -d)"
