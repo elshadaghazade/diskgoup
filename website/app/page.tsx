@@ -31,12 +31,13 @@ const FAQ = [
       'files end up in the recycle bin rather than being deleted outright.',
   },
   {
-    question: 'Why does macOS or Windows warn me about the download?',
+    question: 'Why does macOS or Windows ask me about the download?',
     answer:
-      'The project publishes no signing certificate, so the macOS .dmg and the Windows .exe are ' +
-      'unsigned and not notarized. Whether to allow an unsigned build on your own machine is your ' +
-      'decision, and your responsibility. The portable copies are asked about in the same way — ' +
-      'the check follows the code, not the file it arrives in.',
+      'The macOS app is signed with a Developer ID and notarized by Apple, so macOS asks you to ' +
+      'confirm the first launch — that is the ordinary prompt for a signed app, not a warning ' +
+      'about a broken one. The Windows installer carries no code-signing certificate, so ' +
+      'SmartScreen may warn on a machine that has never seen it. The portable copies are asked ' +
+      'about in the same way — the check follows the code, not the file it arrives in.',
   },
   {
     question: 'Can I use it on a server or in a script?',

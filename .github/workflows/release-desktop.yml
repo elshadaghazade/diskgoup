@@ -30,6 +30,12 @@ jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    # The Developer ID certificate and the Apple credentials live in the
+    # repository environment of this name. GitHub hands environment secrets
+    # only to a job that declares the environment — without this line the
+    # build finds no certificate at all and signs ad-hoc, which is what
+    # macOS calls a damaged app.
+    environment: MACOS_CERTIFICATE
     defaults:
       run:
         shell: bash
@@ -91,6 +97,138 @@ jobs:
             ui/package-lock.json
             electron/package-lock.json
 
+      # The certificate and the Apple credentials are checked here, before
+      # anything is built: a wrong certificate or a wrong password is
+      # known in a minute instead of after a whole build.
+      - name: Import the Developer ID certificate
+        if: runner.os == 'macOS'
+        # A Developer ID certificate, when the repository has one, replaces the
+        # ad-hoc signature the build uses by default.
+        #
+        # The variables below must not merely be *empty* when the secrets are
+        # absent: electron-builder reads CSC_LINK as the path of a
+        # certificate, and an empty path resolves to the working directory —
+        # which is not a file, and the build dies with "not a file". So they
+        # are only written to the environment when there is something to
+        # write.
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$MACOS_CERTIFICATE" ]; then
+            echo "::warning::no Developer ID certificate in the environment — the build signs ad-hoc, and macOS will ask about the app"
+            exit 0
+          fi
+
+          # The secret is the .p12 as base64. It goes into a file rather than
+          # into CSC_LINK itself, so that electron-builder reads it as the
+          # file it is.
+          python -c "import base64, os, pathlib; data = ''.join(os.environ['MACOS_CERTIFICATE'].split()); data += '=' * (-len(data) % 4); pathlib.Path(os.environ['RUNNER_TEMP'], 'certificate.p12').write_bytes(base64.b64decode(data))"
+
+          # Are the Apple credentials good?
+          #
+          # Notarization needs them, and a wrong password is the kind of
+          # mistake that costs a whole build to discover. Asking Apple
+          # costs a second, so it is asked here — before anything is packed,
+          # signed or published.
+          #
+          # The check needs all three: the Apple ID, its app-specific
+          # password and the team. When they are not all there, there is
+          # nothing to ask and the certificate check below says what is
+          # missing.
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            if xcrun notarytool history --apple-id "$APPLE_ID" \
+                 --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+                 --team-id "$APPLE_TEAM_ID" >/dev/null 2>"$RUNNER_TEMP/notary.log"; then
+              echo "→ Apple accepts the credentials"
+            else
+              echo "::error::Apple does not accept the credentials — nothing is published"
+              tr '\n' ' ' < "$RUNNER_TEMP/notary.log"
+              echo
+              echo "  The password must be an app-specific password, not the Apple ID password:"
+              echo "  appleid.apple.com → Sign-In and Security → App-Specific Passwords → Generate."
+              exit 1
+            fi
+          fi
+
+          # Which certificate is this, really?
+          #
+          # electron-builder signs with an identity called "Developer ID
+          # Application". The Apple Distribution certificate — the one the
+          # App Store uses — carries another name, and Apple does not
+          # notarize an app signed with it outside the App Store: such an app
+          # is refused by Gatekeeper just like an unsigned one.
+          #
+          # So the name is checked here, where the answer can still be acted
+          # on. When the certificate is of the wrong kind the build stops
+          # instead: an app signed with it is refused by Gatekeeper just like
+          # an unsigned one, and a release that carries such an app is worse
+          # than no release at all. Nothing is published, and the message
+          # below says exactly what has to change.
+          subjects=""
+          if ! openssl pkcs12 -in "$RUNNER_TEMP/certificate.p12" -nokeys \
+               -passin "pass:$MACOS_CERTIFICATE_PASSWORD" \
+               -out "$RUNNER_TEMP/certificates.pem" 2>"$RUNNER_TEMP/certificate.log"; then
+            # A file exported from Keychain Access or from the Apple portal is
+            # often encrypted with RC2, which OpenSSL 3 only reads with its
+            # legacy provider.
+            cp "$RUNNER_TEMP/certificate.log" "$RUNNER_TEMP/certificate-plain.log"
+            if ! openssl pkcs12 -legacy -in "$RUNNER_TEMP/certificate.p12" -nokeys \
+                 -passin "pass:$MACOS_CERTIFICATE_PASSWORD" \
+                 -out "$RUNNER_TEMP/certificates.pem" 2>"$RUNNER_TEMP/certificate.log"; then
+              echo "::error::the certificate in the environment could not be read — nothing is published"
+              tr '\n' ' ' < "$RUNNER_TEMP/certificate-plain.log"
+              echo
+              exit 1
+            fi
+          fi
+          subjects="$(openssl crl2pkcs7 -nocrl -certfile "$RUNNER_TEMP/certificates.pem" 2>/dev/null \
+            | openssl pkcs7 -print_certs -noout 2>/dev/null || true)"
+
+          case "$subjects" in
+            *"Developer ID Application"*) ;;
+            *)
+              echo "::error::the certificate in the environment is not a Developer ID Application certificate — nothing is published"
+              printf '%s\n' "$subjects" | sed 's/^/  /'
+              echo "  Only a Developer ID Application certificate can be notarized outside the App Store."
+              echo "  The Apple Distribution certificate — the one the App Store uses — cannot,"
+              echo "  and the Apple Development one is for development builds only."
+              echo "  Create the right one in Xcode (Settings → Accounts → the team →"
+              echo "  Manage Certificates → +) and put it into the environment with"
+              echo "  scripts/upload-macos-cert.sh."
+              exit 1
+              ;;
+          esac
+
+          echo "CSC_LINK=$RUNNER_TEMP/certificate.p12" >> "$GITHUB_ENV"
+          if [ -n "$MACOS_CERTIFICATE_PASSWORD" ]; then
+            echo "CSC_KEY_PASSWORD=$MACOS_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
+          fi
+
+          # Notarization needs the Apple ID, its app-specific password and the
+          # team ID. All three or none — electron-builder throws when one of
+          # them is missing.
+          #
+          # A certificate without them is not a half-configured build, it is a
+          # broken one: the app would carry a Developer ID signature but no
+          # notarization, and macOS answers that with "cannot be opened
+          # because the developer cannot be verified". So the build stops
+          # here instead of publishing an app that Gatekeeper blocks.
+          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "APPLE_ID=$APPLE_ID" >> "$GITHUB_ENV"
+            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD" >> "$GITHUB_ENV"
+            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
+          else
+            echo "✗ a Developer ID certificate is configured, but the Apple credentials are not."
+            echo "  APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID must all be set:"
+            echo "  the app cannot be notarized without them, and an un-notarized app is"
+            echo "  blocked by Gatekeeper. Nothing is published."
+            exit 1
+          fi
+
       - name: Install the dependencies
         run: |
           uv sync
@@ -115,49 +253,6 @@ jobs:
           npm --prefix electron run build:cli
           npm --prefix electron run build:assets
 
-      - name: Import the Developer ID certificate
-        if: runner.os == 'macOS'
-        # A Developer ID certificate, when the repository has one, replaces the
-        # ad-hoc signature the build uses by default.
-        #
-        # The variables below must not merely be *empty* when the secrets are
-        # absent: electron-builder reads CSC_LINK as the path of a
-        # certificate, and an empty path resolves to the working directory —
-        # which is not a file, and the build dies with "not a file". So they
-        # are only written to the environment when there is something to
-        # write.
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          if [ -z "$MACOS_CERTIFICATE" ]; then
-            echo "→ no Developer ID certificate — the build signs ad-hoc"
-            exit 0
-          fi
-
-          # The secret is the .p12 as base64. It goes into a file rather than
-          # into CSC_LINK itself, so that electron-builder reads it as the
-          # file it is.
-          python -c "import base64, os, pathlib; data = ''.join(os.environ['MACOS_CERTIFICATE'].split()); data += '=' * (-len(data) % 4); pathlib.Path(os.environ['RUNNER_TEMP'], 'certificate.p12').write_bytes(base64.b64decode(data))"
-          echo "CSC_LINK=$RUNNER_TEMP/certificate.p12" >> "$GITHUB_ENV"
-          if [ -n "$MACOS_CERTIFICATE_PASSWORD" ]; then
-            echo "CSC_KEY_PASSWORD=$MACOS_CERTIFICATE_PASSWORD" >> "$GITHUB_ENV"
-          fi
-
-          # Notarization needs the Apple ID, its app-specific password and the
-          # team ID. All three or none — electron-builder throws when one of
-          # them is missing.
-          if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
-            echo "APPLE_ID=$APPLE_ID" >> "$GITHUB_ENV"
-            echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD" >> "$GITHUB_ENV"
-            echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
-          else
-            echo "→ no Apple credentials — the build is signed but not notarized"
-          fi
-
       - name: Package the app
         working-directory: electron
         # `--publish never`: the release workflow attaches the files itself, so
@@ -169,8 +264,15 @@ jobs:
           # "identity: -" in package.json asks electron-builder for an ad-hoc
           # signature. When a Developer ID certificate is configured, name it
           # instead, so the release is signed with it and can be notarized.
+          #
+          # forceCodeSigning is what makes a missing identity an error. Left
+          # out, electron-builder only warns about it and builds the app
+          # anyway — unsigned, and refused by macOS all the same.
           if [ -n "${CSC_LINK:-}" ]; then
-            npx electron-builder ${{ matrix.builder }} --config.mac.identity='Developer ID Application' --publish never
+            npx electron-builder ${{ matrix.builder }} \
+              --config.mac.identity='Developer ID Application' \
+              --config.mac.forceCodeSigning=true \
+              --publish never
           else
             npx electron-builder ${{ matrix.builder }} --publish never
           fi
@@ -181,7 +283,16 @@ jobs:
         # The build signs the bundle and the afterSign hook checks it. This
         # step is the gate that survives a build in which signing was skipped
         # altogether — an unsigned app is what macOS calls "damaged".
-        run: node scripts/verify-signature.mjs
+        run: |
+          node scripts/verify-signature.mjs
+          # A notarized bundle carries a stapled ticket, and that ticket is
+          # what lets Gatekeeper open the app instead of blocking it. The
+          # check runs only when notarization was configured, so the release
+          # can never ship a macOS build that macOS refuses to open.
+          if [ -n "${APPLE_ID:-}" ]; then
+            find release -maxdepth 2 -name '*.app' -print0 |
+              xargs -0 -I{} xcrun stapler validate '{}'
+          fi
 
       - name: Give the artifacts their release names
         # Every row builds two files: the installer and the portable one that

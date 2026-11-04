@@ -182,14 +182,15 @@ each platform in `electron/package.json` names them, and one `dist:*` command
 produces all of them. The artifact names carry `${ext}`, because one name
 pattern covers every target of a platform.
 
-The macOS build signs the bundle with an **ad-hoc** identity (`identity: "-"`)
-and the hardened runtime, with the entitlements in `electron/build/`. That
-seals the app — so it is not a damaged file — but it proves nothing about who
-built it, so Gatekeeper still asks on another machine. The packaging fails if
-the signature does not verify, so a broken seal can never be shipped.
+The macOS build signs the bundle with a **Developer ID** and the hardened
+runtime, with the entitlements in `electron/build/`. The app is notarized by
+Apple before the `.dmg` and the portable `.zip` are assembled, so both carry
+the notarized bundle. The packaging fails if the signature does not verify,
+so a broken seal can never be shipped.
 
-To sign it properly, add these repository secrets; the release workflow picks
-them up on its own:
+The certificate and the Apple credentials live in the repository environment
+`MACOS_CERTIFICATE` — GitHub hands environment secrets only to a job that
+declares the environment, and the release job declares it:
 
 | Secret | What it is |
 |---|---|
@@ -199,8 +200,40 @@ them up on its own:
 | `APPLE_APP_SPECIFIC_PASSWORD` | an app-specific password for that Apple ID |
 | `APPLE_TEAM_ID` | the 10-character team ID |
 
-With them in place the app is signed with the Developer ID and notarized
-before the `.dmg` is built, and macOS opens it without asking anything.
+`scripts/upload-macos-cert.sh` puts a certificate into that environment and
+refuses one that is not a `Developer ID Application` certificate: the Apple
+Distribution certificate — the one the App Store uses — cannot be notarized
+outside the App Store, and the Apple Development one is for development
+builds only. An app signed with either is refused by Gatekeeper all the same.
+With `--check` the script only says what a certificate is, without uploading
+anything.
+
+The certificate comes from Apple, in one of two ways:
+
+| Way | What to do |
+|---|---|
+| Xcode | Settings → Accounts → the team → Manage Certificates → **+** → Developer ID Application. Then export it from Keychain Access, with its private key, as a `.p12`. |
+| The developer portal | `scripts/create-devid-csr.sh <folder>` writes a request; upload it at developer.apple.com → Certificates → **+** → Developer ID Application, download the certificate, and turn the certificate and the key into a `.p12` — the script's header says how. |
+
+Either way, the `.p12` goes into the environment with
+`scripts/upload-macos-cert.sh <file.p12>`. It never goes into the repository.
+
+The build checks both of those before it packs anything. It asks Apple
+whether the credentials are good — a second, against a wrong app-specific
+password that would otherwise cost a whole build — and it looks at the name
+of the certificate. A wrong one stops the release with the reason, instead
+of shipping an app macOS will not open.
+
+The signature is checked too, in two places. `forceCodeSigning` makes
+electron-builder fail when the identity it was told to use is not in the
+keychain — left to itself it only warns and builds the app unsigned. And
+`electron/scripts/verify-signature.mjs`, which runs after every signature,
+refuses an ad-hoc signature whenever a certificate is configured: an
+ad-hoc signature seals the bundle just as well, so without that check a
+build that lost the certificate would look exactly like a good one.
+
+Without the certificate the build falls back to an **ad-hoc** signature
+(`identity: "-"`), which seals the app but proves nothing about who built it.
 
 ## Releasing
 
@@ -247,8 +280,9 @@ git push origin v0.3.0
 
 :::caution
 The Windows installer is **unsigned**, so SmartScreen warns on a machine that
-has never seen it. The macOS app is signed, but ad-hoc rather than with a
-Developer ID, so Gatekeeper asks the user to approve it once.
+has never seen it. The macOS app is signed with a Developer ID and notarized
+by Apple, so macOS asks the user to confirm the first launch — the ordinary
+prompt, not a warning about a damaged app.
 :::
 
 ## The repository layout

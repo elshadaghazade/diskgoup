@@ -6,6 +6,12 @@
 // resources, and that it belongs to DiskGOup and not to the stock Electron
 // bundle we start from.
 //
+// When the build was given a certificate (CSC_LINK is set), the signature
+// has to be a Developer ID one. An ad-hoc signature seals the bundle just
+// as well, so without this check a build that silently failed to find the
+// certificate would look exactly like a good one — and macOS would refuse
+// to open the app.
+//
 // It is wired into electron-builder as the `afterSign` hook, so a build that
 // produced a broken seal fails right where it happens. It can also be run on
 // its own, which is what the release workflow does:
@@ -23,6 +29,11 @@ import { pathToFileURL } from 'node:url'
 
 const DEFAULT_IDENTIFIER = 'app.diskgoup.desktop'
 const RELEASE_DIR = 'release'
+
+// The release build sets CSC_LINK when a Developer ID certificate is
+// configured — that is the signal that the app has to carry that
+// signature, and not the ad-hoc one that only seals the bundle.
+const requiresDeveloperId = Boolean(process.env.CSC_LINK)
 
 function die(msg) {
   console.error(`\n✗ ${msg}\n`)
@@ -66,7 +77,7 @@ function verifyApp(appPath, expectedIdentifier) {
     )
   }
 
-  const details = codesign(['-dv', '--verbose=2', appPath]).output
+  const details = codesign(['-dv', '--verbose=4', appPath]).output
   const identifier = details.match(/^Identifier=(.*)$/m)?.[1]?.trim()
   const signature = details.match(/^Signature=(.*)$/m)?.[1]?.trim()
   // "Sealed Resources version=2 rules=13 files=14" — or "Sealed Resources=none".
@@ -85,9 +96,31 @@ function verifyApp(appPath, expectedIdentifier) {
     die(`${appPath} has no sealed resources — the signature covers no files.`)
   }
 
+  // When a certificate is configured, the signature has to be that one.
+  //
+  // An ad-hoc signature passes every check above — it seals the bundle and
+  // carries the right identifier — but it proves nothing about who built
+  // the app, and macOS refuses to open it. So the build says out loud that
+  // it expects a Developer ID, and the signature has to be one.
+  //
+  // The Authority line is what says it: it names the certificate that
+  // signed the bundle. An ad-hoc signature has no chain at all, and the
+  // other Apple certificates name themselves differently.
+  const team = details.match(/^TeamIdentifier=(.*)$/m)?.[1]?.trim()
+  const authority = details.match(/^Authority=Developer ID Application:.*$/m)?.[0]
+
+  if (requiresDeveloperId && !authority) {
+    die(
+      `${appPath} is not signed with a Developer ID certificate` +
+        `${signature ? ` — it is signed "${signature}"` : ''}.` +
+        `\nA Developer ID signature is what makes macOS open the app.`
+    )
+  }
+
   console.log(`✓ ${appPath}`)
   console.log(`  identifier: ${identifier}`)
   console.log(`  signature:  ${signature ?? 'unknown'}`)
+  console.log(`  team:       ${team && team !== 'not set' ? team : 'none'}`)
   console.log(`  sealed:     ${sealed}`)
 }
 

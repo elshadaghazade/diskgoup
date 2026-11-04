@@ -161,23 +161,21 @@ like — a folder, a USB stick — and run it from there.
 
 The full list is on the [downloads page](https://diskgoup-docs.vercel.app/getting-started/downloads/).
 
-### Installers macOS and Windows will ask about
+### What macOS and Windows ask about
 
-The macOS `.dmg` and the Windows `.exe` are **not signed with a certificate
-that Apple or Microsoft trusts** — the project publishes no Developer ID and
-no code-signing certificate — so **Gatekeeper and SmartScreen check the app
-before the first launch.** The Linux AppImage is unaffected.
+The macOS app is signed with a **Developer ID** and **notarized by Apple**, so
+the first launch shows the ordinary *"DiskGOup was downloaded from the
+Internet — are you sure you want to open it?"* dialog and asks you to choose
+**Open**. That is the normal prompt for a signed app, not a warning about a
+broken one. The portable `.zip` carries the same signature and the same
+notarization: the check follows the code, not the file it arrives in.
 
-The portable files are asked about in exactly the same way: the check
-follows the code, not the file it arrives in.
+The Windows installer carries no code-signing certificate, so **SmartScreen
+may warn on a machine that has never seen it** — choose **More info** and then
+**Run anyway**. The Linux AppImage is unaffected.
 
-The macOS app does carry a signature, so macOS does not treat the download as
-a damaged file; what it lacks is Apple's stamp of approval, which only a paid
-Developer ID buys. Gatekeeper still asks, and you say yes once.
-
-That check is the operating system asking, not the app failing. Whether to
-allow such a build on your own machine is your decision, and your
-responsibility.
+Whether to allow an unsigned build on your own machine is your decision, and
+your responsibility.
 
 | Platform | What you see | What to do |
 |---|---|---|
