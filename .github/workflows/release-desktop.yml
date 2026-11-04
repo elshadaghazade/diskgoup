@@ -97,30 +97,9 @@ jobs:
             ui/package-lock.json
             electron/package-lock.json
 
-      - name: Install the dependencies
-        run: |
-          uv sync
-          npm --prefix ui ci
-          npm --prefix electron ci
-
-      - name: The release we are building
-        run: |
-          version="${{ inputs.version || github.ref_name }}"
-          echo "RELEASE_VERSION=${version#v}" >> "$GITHUB_ENV"
-          echo "RELEASE_TAG=v${version#v}" >> "$GITHUB_ENV"
-
-      - name: Take the version from the tag
-        run: python scripts/set-version.py "$RELEASE_VERSION"
-
-      - name: Build the renderer
-        run: npm --prefix ui run build
-
-      - name: Build the Electron app
-        run: |
-          npm --prefix electron run build:electron
-          npm --prefix electron run build:cli
-          npm --prefix electron run build:assets
-
+      # The certificate and the Apple credentials are checked here, before
+      # anything is built: a wrong certificate or a wrong password is
+      # known in a minute instead of after a whole build.
       - name: Import the Developer ID certificate
         if: runner.os == 'macOS'
         # A Developer ID certificate, when the repository has one, replaces the
@@ -249,6 +228,30 @@ jobs:
             echo "  blocked by Gatekeeper. Nothing is published."
             exit 1
           fi
+
+      - name: Install the dependencies
+        run: |
+          uv sync
+          npm --prefix ui ci
+          npm --prefix electron ci
+
+      - name: The release we are building
+        run: |
+          version="${{ inputs.version || github.ref_name }}"
+          echo "RELEASE_VERSION=${version#v}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=v${version#v}" >> "$GITHUB_ENV"
+
+      - name: Take the version from the tag
+        run: python scripts/set-version.py "$RELEASE_VERSION"
+
+      - name: Build the renderer
+        run: npm --prefix ui run build
+
+      - name: Build the Electron app
+        run: |
+          npm --prefix electron run build:electron
+          npm --prefix electron run build:cli
+          npm --prefix electron run build:assets
 
       - name: Package the app
         working-directory: electron
