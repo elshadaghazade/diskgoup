@@ -264,8 +264,15 @@ jobs:
           # "identity: -" in package.json asks electron-builder for an ad-hoc
           # signature. When a Developer ID certificate is configured, name it
           # instead, so the release is signed with it and can be notarized.
+          #
+          # forceCodeSigning is what makes a missing identity an error. Left
+          # out, electron-builder only warns about it and builds the app
+          # anyway — unsigned, and refused by macOS all the same.
           if [ -n "${CSC_LINK:-}" ]; then
-            npx electron-builder ${{ matrix.builder }} --config.mac.identity='Developer ID Application' --publish never
+            npx electron-builder ${{ matrix.builder }} \
+              --config.mac.identity='Developer ID Application' \
+              --config.mac.forceCodeSigning=true \
+              --publish never
           else
             npx electron-builder ${{ matrix.builder }} --publish never
           fi

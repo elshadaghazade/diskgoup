@@ -224,6 +224,14 @@ password that would otherwise cost a whole build — and it looks at the name
 of the certificate. A wrong one stops the release with the reason, instead
 of shipping an app macOS will not open.
 
+The signature is checked too, in two places. `forceCodeSigning` makes
+electron-builder fail when the identity it was told to use is not in the
+keychain — left to itself it only warns and builds the app unsigned. And
+`electron/scripts/verify-signature.mjs`, which runs after every signature,
+refuses an ad-hoc signature whenever a certificate is configured: an
+ad-hoc signature seals the bundle just as well, so without that check a
+build that lost the certificate would look exactly like a good one.
+
 Without the certificate the build falls back to an **ad-hoc** signature
 (`identity: "-"`), which seals the app but proves nothing about who built it.
 
