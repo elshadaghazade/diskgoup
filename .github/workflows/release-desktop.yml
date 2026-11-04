@@ -30,6 +30,12 @@ jobs:
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    # The Developer ID certificate and the Apple credentials live in the
+    # repository environment of this name. GitHub hands environment secrets
+    # only to a job that declares the environment — without this line the
+    # build finds no certificate at all and signs ad-hoc, which is what
+    # macOS calls a damaged app.
+    environment: MACOS_CERTIFICATE
     defaults:
       run:
         shell: bash
@@ -150,12 +156,22 @@ jobs:
           # Notarization needs the Apple ID, its app-specific password and the
           # team ID. All three or none — electron-builder throws when one of
           # them is missing.
+          #
+          # A certificate without them is not a half-configured build, it is a
+          # broken one: the app would carry a Developer ID signature but no
+          # notarization, and macOS answers that with "cannot be opened
+          # because the developer cannot be verified". So the build stops
+          # here instead of publishing an app that Gatekeeper blocks.
           if [ -n "$APPLE_ID" ] && [ -n "$APPLE_APP_SPECIFIC_PASSWORD" ] && [ -n "$APPLE_TEAM_ID" ]; then
             echo "APPLE_ID=$APPLE_ID" >> "$GITHUB_ENV"
             echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD" >> "$GITHUB_ENV"
             echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
           else
-            echo "→ no Apple credentials — the build is signed but not notarized"
+            echo "✗ a Developer ID certificate is configured, but the Apple credentials are not."
+            echo "  APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID must all be set:"
+            echo "  the app cannot be notarized without them, and an un-notarized app is"
+            echo "  blocked by Gatekeeper. Nothing is published."
+            exit 1
           fi
 
       - name: Package the app
@@ -181,7 +197,16 @@ jobs:
         # The build signs the bundle and the afterSign hook checks it. This
         # step is the gate that survives a build in which signing was skipped
         # altogether — an unsigned app is what macOS calls "damaged".
-        run: node scripts/verify-signature.mjs
+        run: |
+          node scripts/verify-signature.mjs
+          # A notarized bundle carries a stapled ticket, and that ticket is
+          # what lets Gatekeeper open the app instead of blocking it. The
+          # check runs only when notarization was configured, so the release
+          # can never ship a macOS build that macOS refuses to open.
+          if [ -n "${APPLE_ID:-}" ]; then
+            find release -maxdepth 2 -name '*.app' -print0 |
+              xargs -0 -I{} xcrun stapler validate '{}'
+          fi
 
       - name: Give the artifacts their release names
         # Every row builds two files: the installer and the portable one that
